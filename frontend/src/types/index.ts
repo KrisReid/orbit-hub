@@ -96,11 +96,13 @@ export interface Project {
     title: string;
     status: ThemeStatus;
   } | null;
-  project_type: {
+  project_type?: {
     id: number;
     name: string;
     slug: string;
     color: string | null;
+    workflow?: string[];
+    fields?: ProjectTypeField[];
   };
   dependencies?: Array<{ id: number; title: string; status: string }>;
   tasks?: Array<{ id: number; display_id: string; title: string; status: string }>;

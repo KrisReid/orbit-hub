@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession
-from app.models.project import Project, ProjectType, project_dependencies
+from app.models.project import Project, ProjectType, ProjectTypeField, project_dependencies
 from app.models.theme import Theme
 from app.schemas.base import MessageResponse, PaginatedResponse
 from app.schemas.project import (
@@ -143,7 +143,7 @@ async def get_project(
         .where(Project.id == project_id)
         .options(
             selectinload(Project.theme),
-            selectinload(Project.project_type),
+            selectinload(Project.project_type).selectinload(ProjectType.fields),
             selectinload(Project.dependencies),
             selectinload(Project.tasks),
         )

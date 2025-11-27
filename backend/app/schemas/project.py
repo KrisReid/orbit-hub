@@ -36,7 +36,7 @@ class ProjectTypeFieldUpdate(CoreModel):
     order: int | None = None
 
 
-class ProjectTypeFieldResponse(ProjectTypeFieldBase, TimestampMixin):
+class ProjectTypeFieldResponse(ProjectTypeFieldBase):
     """Project type field response schema."""
     
     id: int
@@ -78,6 +78,7 @@ class ProjectTypeBrief(CoreModel):
     name: str
     slug: str
     color: str | None
+    workflow: list[str] = []
 
 
 class ProjectTypeResponse(ProjectTypeBase, TimestampMixin):
@@ -146,8 +147,10 @@ class ProjectWithDetails(ProjectResponse):
     """Project response with full details including dependencies."""
     
     dependencies: list[ProjectBrief] = []
-    dependents: list[ProjectBrief] = []
     tasks: list["TaskBrief"] = []
+    
+    # Override project_type to include fields for custom field support
+    project_type: ProjectTypeWithFields
 
 
 class AddProjectDependencyRequest(CoreModel):
