@@ -52,14 +52,16 @@ export function BoardPage() {
     },
   });
 
-  // Get workflow from first task type (or default)
-  const workflow = taskTypes?.items?.[0]?.workflow || ['Backlog', 'To Do', 'In Progress', 'In Review', 'Done'];
-
-  // Group tasks by status
-  const tasksByStatus = workflow.reduce((acc, status) => {
-    acc[status] = tasks?.items?.filter(t => t.status === status) || [];
+  // Group tasks by task type and status
+  const tasksByTaskTypeAndStatus = taskTypes?.items?.reduce((acc, taskType) => {
+    acc[taskType.id] = (taskType.workflow || []).reduce((statusAcc, status) => {
+      statusAcc[status] = tasks?.items?.filter(
+        t => t.task_type_id === taskType.id && t.status === status
+      ) || [];
+      return statusAcc;
+    }, {} as Record<string, Task[]>);
     return acc;
-  }, {} as Record<string, Task[]>);
+  }, {} as Record<number, Record<string, Task[]>>) || {};
 
   const handleDragStart = (e: React.DragEvent, task: Task) => {
     e.dataTransfer.setData('taskId', String(task.id));
@@ -108,64 +110,73 @@ export function BoardPage() {
         </button>
       </div>
 
-      {/* Kanban Board */}
-      <div className="flex space-x-4 overflow-x-auto pb-4">
-        {workflow.map((status) => (
-          <div
-            key={status}
-            className="flex-shrink-0 w-72"
-            onDragOver={handleDragOver}
-            onDrop={(e) => handleDrop(e, status)}
-          >
-            <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-gray-700 dark:text-gray-300">
-                  {status}
-                </h3>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  {tasksByStatus[status]?.length || 0}
-                </span>
-              </div>
-              <div className="space-y-3 min-h-[200px]">
-                {tasksByStatus[status]?.map((task) => (
-                  <div
-                    key={task.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, task)}
-                    onClick={() => setSelectedTask(task)}
-                    className="bg-white dark:bg-gray-700 rounded-lg p-3 shadow-sm border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-mono text-xs text-primary-600 dark:text-primary-400">
-                        {task.display_id}
-                      </span>
-                      <span
-                        className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium"
-                        style={{
-                          backgroundColor: task.task_type?.color ? `${task.task_type.color}20` : undefined,
-                          color: task.task_type?.color || undefined
-                        }}
-                      >
-                        {task.task_type?.name}
+      {/* Kanban Boards - One per Task Type */}
+      <div className="space-y-8">
+        {taskTypes?.items?.map((taskType) => (
+          <div key={taskType.id} className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: taskType.color || '#ccc' }}
+              />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {taskType.name}
+              </h2>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                ({Object.values(tasksByTaskTypeAndStatus[taskType.id] || {}).reduce((sum, taskList) => sum + taskList.length, 0)} tasks)
+              </span>
+            </div>
+            <div className="flex space-x-4 overflow-x-auto pb-4">
+              {(taskType.workflow || []).map((status) => (
+                <div
+                  key={status}
+                  className="flex-shrink-0 w-72"
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, status)}
+                >
+                  <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold text-gray-700 dark:text-gray-300">
+                        {status}
+                      </h3>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {tasksByTaskTypeAndStatus[taskType.id]?.[status]?.length || 0}
                       </span>
                     </div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">
-                      {task.title}
-                    </p>
-                    {task.project && (
-                      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {task.project.title}
-                      </p>
-                    )}
-                    {task.github_links && task.github_links.length > 0 && (
-                      <div className="mt-2 flex items-center text-xs text-gray-400">
-                        <GitBranch className="h-3 w-3 mr-1" />
-                        {task.github_links.length} PR{task.github_links.length > 1 ? 's' : ''}
-                      </div>
-                    )}
+                    <div className="space-y-3 min-h-[200px]">
+                      {tasksByTaskTypeAndStatus[taskType.id]?.[status]?.map((task) => (
+                        <div
+                          key={task.id}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, task)}
+                          onClick={() => setSelectedTask(task)}
+                          className="bg-white dark:bg-gray-700 rounded-lg p-3 shadow-sm border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-mono text-xs text-primary-600 dark:text-primary-400">
+                              {task.display_id}
+                            </span>
+                          </div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">
+                            {task.title}
+                          </p>
+                          {task.project && (
+                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 truncate">
+                              {task.project.title}
+                            </p>
+                          )}
+                          {task.github_links && task.github_links.length > 0 && (
+                            <div className="mt-2 flex items-center text-xs text-gray-400">
+                              <GitBranch className="h-3 w-3 mr-1" />
+                              {task.github_links.length} PR{task.github_links.length > 1 ? 's' : ''}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -175,7 +186,7 @@ export function BoardPage() {
       {selectedTask && (
         <TaskDetailModal
           task={selectedTask}
-          workflow={workflow}
+          workflow={taskTypes?.items?.find(tt => tt.id === selectedTask.task_type_id)?.workflow || []}
           onClose={() => setSelectedTask(null)}
           onUpdate={(data) => {
             updateMutation.mutate({ id: selectedTask.id, data });

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/auth';
+import { api } from '@/api/client';
 import {
   LayoutDashboard,
   Target,
@@ -29,6 +31,12 @@ export function Layout() {
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [boardsOpen, setBoardsOpen] = useState(true);
+
+  const { data: teams } = useQuery({
+    queryKey: ['teams'],
+    queryFn: () => api.teams.list(),
+  });
 
   const handleLogout = () => {
     logout();
@@ -92,6 +100,41 @@ export function Layout() {
                 </Link>
               );
             })}
+
+            {/* Boards section */}
+            <div className="pt-4 mt-4 border-t border-gray-200">
+              <button
+                onClick={() => setBoardsOpen(!boardsOpen)}
+                className="flex items-center justify-between w-full px-3 py-2 text-sm font-semibold text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <span>Boards</span>
+                <ChevronDown
+                  className={clsx(
+                    'w-4 h-4 transition-transform',
+                    boardsOpen ? 'rotate-180' : ''
+                  )}
+                />
+              </button>
+              {boardsOpen && (
+                <div className="mt-2 space-y-1">
+                  {teams?.items?.map((team) => (
+                    <Link
+                      key={team.id}
+                      to={`/board/${team.slug}`}
+                      className={clsx(
+                        'flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors',
+                        location.pathname === `/board/${team.slug}`
+                          ? 'bg-primary-50 text-primary-700 font-medium'
+                          : 'text-gray-600 hover:bg-gray-100'
+                      )}
+                    >
+                      <div className="w-2 h-2 bg-current rounded-full" />
+                      {team.name}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           </nav>
 
           {/* Settings link (admin only) */}

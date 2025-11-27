@@ -31,10 +31,10 @@ export function SettingsPage() {
   }
 
   const navItems = [
-    { to: '/settings/users', label: 'Users', icon: Users },
-    { to: '/settings/teams', label: 'Teams', icon: UsersRound },
-    { to: '/settings/project-types', label: 'Project Types', icon: FolderKanban },
-    { to: '/settings/task-types', label: 'Task Types', icon: ListTodo },
+    { to: 'users', label: 'Users', icon: Users },
+    { to: 'teams', label: 'Teams', icon: UsersRound },
+    { to: 'project-types', label: 'Project Types', icon: FolderKanban },
+    { to: 'task-types', label: 'Task Types', icon: ListTodo },
   ];
 
   return (
@@ -65,11 +65,11 @@ export function SettingsPage() {
       {/* Content */}
       <div className="flex-1">
         <Routes>
-          <Route path="/" element={<Navigate to="/settings/users" replace />} />
-          <Route path="/users" element={<UsersSettings />} />
-          <Route path="/teams" element={<TeamsSettings />} />
-          <Route path="/project-types" element={<ProjectTypesSettings />} />
-          <Route path="/task-types" element={<TaskTypesSettings />} />
+          <Route path="/" element={<Navigate to="users" replace />} />
+          <Route path="users" element={<UsersSettings />} />
+          <Route path="teams" element={<TeamsSettings />} />
+          <Route path="project-types" element={<ProjectTypesSettings />} />
+          <Route path="task-types" element={<TaskTypesSettings />} />
         </Routes>
       </div>
     </div>
@@ -421,8 +421,8 @@ function TaskTypesSettings() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: { name: string; slug: string; workflow: string[]; team_id: number }) => 
-      api.taskTypes.create(data, data.team_id),
+    mutationFn: (data: { name: string; slug: string; workflow: string[]; team_id: number }) =>
+      api.taskTypes.create(data.team_id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['taskTypes'] });
       setShowModal(false);

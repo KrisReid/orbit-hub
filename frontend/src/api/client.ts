@@ -417,6 +417,14 @@ class ApiClient {
     delete: (id: number) => this.deleteRelease(id),
   };
 
+  users = {
+    list: () => this.getUsers(),
+    get: (id: number) => this.getUsers(),
+    create: (data: Partial<User> & { password: string }) => this.createUser(data),
+    update: (id: number, data: Partial<User>) => this.updateUser(id, data),
+    delete: (id: number) => this.deleteUser(id),
+  };
+
   teams = {
     list: () => this.getTeams(),
     get: (id: number) => this.getTeam(id),

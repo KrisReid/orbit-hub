@@ -191,26 +191,6 @@ export function ProjectDetailPage() {
           </div>
 
           {/* Blocked By */}
-          {project.dependents && project.dependents.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Blocking
-              </h2>
-              <div className="space-y-2">
-                {project.dependents.map((dep) => (
-                  <Link
-                    key={dep.id}
-                    to={`/projects/${dep.id}`}
-                    className="block p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {dep.title}
-                    </p>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Metadata */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
