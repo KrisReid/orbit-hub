@@ -363,6 +363,67 @@ class ApiClient {
     const response = await this.client.delete<MessageResponse>(`/github/links/${taskId}/${linkId}`);
     return response.data;
   }
+  // Namespace-based API for pages
+  themes = {
+    list: (params?: { include_archived?: boolean }) =>
+      this.getThemes(1, 50, params?.include_archived),
+    get: (id: number) => this.getTheme(id),
+    create: (data: Partial<Theme>) => this.createTheme(data),
+    update: (id: number, data: Partial<Theme>) => this.updateTheme(id, data),
+    delete: (id: number) => this.deleteTheme(id),
+  };
+
+  projects = {
+    list: (filters?: { project_type_id?: number; status?: string; page?: number; page_size?: number }) =>
+      this.getProjects(filters?.page || 1, filters?.page_size || 50, filters),
+    get: (id: number) => this.getProject(id),
+    create: (data: Partial<Project>) => this.createProject(data),
+    update: (id: number, data: Partial<Project>) => this.updateProject(id, data),
+    delete: (id: number) => this.deleteProject(id),
+  };
+
+  projectTypes = {
+    list: () => this.getProjectTypes(),
+    get: (id: number) => this.getProjectType(id),
+    create: (data: Partial<ProjectType>) => this.createProjectType(data),
+    update: (id: number, data: Partial<ProjectType>) => this.updateProjectType(id, data),
+    delete: (id: number) => this.deleteProjectType(id),
+  };
+
+  tasks = {
+    list: (filters?: { team_id?: number; project_id?: number; release_id?: number; status?: string; page?: number; page_size?: number }) =>
+      this.getTasks(filters?.page || 1, filters?.page_size || 50, filters),
+    get: (id: number) => this.getTask(id),
+    create: (data: Partial<Task>) => this.createTask(data),
+    update: (id: number, data: Partial<Task>) => this.updateTask(id, data),
+    delete: (id: number) => this.deleteTask(id),
+  };
+
+  taskTypes = {
+    list: (filters?: { team_id?: number }) =>
+      this.getTaskTypes(1, 50, filters?.team_id),
+    get: (id: number) => this.getTaskType(id),
+    create: (teamId: number, data: Partial<TaskType>) => this.createTaskType(teamId, data),
+    update: (id: number, data: Partial<TaskType>) => this.updateTaskType(id, data),
+    delete: (id: number) => this.deleteTaskType(id),
+  };
+
+  releases = {
+    list: (filters?: { status?: string }) =>
+      this.getReleases(1, 50, filters?.status),
+    get: (id: number) => this.getRelease(id),
+    create: (data: Partial<Release>) => this.createRelease(data),
+    update: (id: number, data: Partial<Release>) => this.updateRelease(id, data),
+    delete: (id: number) => this.deleteRelease(id),
+  };
+
+  teams = {
+    list: () => this.getTeams(),
+    get: (id: number) => this.getTeam(id),
+    create: (data: Partial<Team>) => this.createTeam(data),
+    update: (id: number, data: Partial<Team>) => this.updateTeam(id, data),
+    delete: (id: number) => this.deleteTeam(id),
+  };
 }
 
 export const api = new ApiClient();
