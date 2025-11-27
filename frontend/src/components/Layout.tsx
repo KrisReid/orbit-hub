@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Target,
   FolderKanban,
-  Columns3,
   Rocket,
   Settings,
   LogOut,
@@ -21,7 +20,6 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Themes', href: '/themes', icon: Target },
   { name: 'Projects', href: '/projects', icon: FolderKanban },
-  { name: 'Board', href: '/board', icon: Columns3 },
   { name: 'Releases', href: '/releases', icon: Rocket },
 ];
 

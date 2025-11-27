@@ -51,6 +51,17 @@ export function ProjectDetailPage() {
     updateMutation.mutate({ description });
   };
 
+  // Get workflow array and current status index
+  const workflow = projectType?.workflow || project.project_type?.workflow || [];
+  const currentStatusIndex = workflow.indexOf(project.status);
+
+  // Helper to determine the state of each workflow step
+  const getStepState = (stepIndex: number): 'completed' | 'current' | 'upcoming' => {
+    if (stepIndex < currentStatusIndex) return 'completed';
+    if (stepIndex === currentStatusIndex) return 'current';
+    return 'upcoming';
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -70,22 +81,6 @@ export function ProjectDetailPage() {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
             {project.title}
           </h1>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Status
-          </label>
-          <select
-            value={project.status}
-            onChange={(e) => updateMutation.mutate({ status: e.target.value })}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium"
-          >
-            {(projectType?.workflow || project.project_type?.workflow)?.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
 
@@ -245,34 +240,42 @@ export function ProjectDetailPage() {
               Workflow State
             </h3>
             <div className="space-y-3">
-              {(projectType?.workflow || project.project_type?.workflow)?.map((status) => (
-                <button
-                  key={status}
-                  onClick={() => updateMutation.mutate({ status })}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                    project.status === status
-                      ? 'bg-primary-50 dark:bg-primary-900/30'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                  }`}
-                >
-                  <div
-                    className={`h-3 w-3 rounded-full ${
-                      project.status === status
-                        ? 'bg-primary-600'
-                        : 'bg-gray-300 dark:bg-gray-600'
-                    }`}
-                  />
-                  <span
-                    className={`text-sm font-medium ${
-                      project.status === status
-                        ? 'text-primary-600 dark:text-primary-400'
-                        : 'text-gray-700 dark:text-gray-300'
+              {workflow.map((status, index) => {
+                const stepState = getStepState(index);
+                return (
+                  <button
+                    key={status}
+                    onClick={() => updateMutation.mutate({ status })}
+                    disabled={updateMutation.isPending}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors disabled:opacity-50 ${
+                      stepState === 'current'
+                        ? 'bg-primary-50 dark:bg-primary-900/30'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                     }`}
                   >
-                    {status}
-                  </span>
-                </button>
-              ))}
+                    <div
+                      className={`h-3 w-3 rounded-full flex-shrink-0 ${
+                        stepState === 'completed'
+                          ? 'bg-green-500'
+                          : stepState === 'current'
+                          ? 'bg-primary-600'
+                          : 'border-2 border-gray-300 dark:border-gray-500 bg-transparent'
+                      }`}
+                    />
+                    <span
+                      className={`text-sm font-medium ${
+                        stepState === 'completed'
+                          ? 'text-green-600 dark:text-green-400'
+                          : stepState === 'current'
+                          ? 'text-primary-600 dark:text-primary-400'
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`}
+                    >
+                      {status}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
