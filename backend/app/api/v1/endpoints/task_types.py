@@ -2,11 +2,12 @@
 Task Types API endpoints (team-specific configuration).
 """
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import func, select
+from pydantic import BaseModel
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import AdminUser, CurrentUser, DbSession
-from app.models.task import TaskType, TaskTypeField
+from app.models.task import Task, TaskType, TaskTypeField
 from app.models.team import Team
 from app.schemas.base import MessageResponse, PaginatedResponse
 from app.schemas.task import (
@@ -18,6 +19,18 @@ from app.schemas.task import (
     TaskTypeUpdate,
     TaskTypeWithFields,
 )
+
+
+class TaskStatusMigration(BaseModel):
+    """Request to migrate tasks from old status to new status."""
+    old_status: str
+    new_status: str
+
+
+class TaskTypeMigrationRequest(BaseModel):
+    """Request for migrating tasks when deleting a task type."""
+    target_task_type_id: int
+    status_mappings: list[TaskStatusMigration] = []
 
 router = APIRouter(prefix="/task-types", tags=["Task Types"])
 
@@ -173,6 +186,124 @@ async def update_task_type(
     return TaskTypeResponse.model_validate(task_type)
 
 
+@router.get("/{task_type_id}/stats", response_model=dict)
+async def get_task_type_stats(
+    task_type_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """
+    Get statistics about a task type (task counts by status, etc.) for deletion planning.
+    """
+    result = await db.execute(
+        select(TaskType)
+        .where(TaskType.id == task_type_id)
+        .options(selectinload(TaskType.fields))
+    )
+    task_type = result.scalar_one_or_none()
+    
+    if task_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task type not found",
+        )
+    
+    # Count tasks by status
+    tasks_by_status = {}
+    for status_name in task_type.workflow:
+        count_result = await db.execute(
+            select(func.count()).select_from(Task).where(
+                Task.task_type_id == task_type_id,
+                Task.status == status_name,
+            )
+        )
+        count = count_result.scalar() or 0
+        if count > 0:
+            tasks_by_status[status_name] = count
+    
+    total_tasks = sum(tasks_by_status.values())
+    
+    return {
+        "task_type_id": task_type_id,
+        "task_type_name": task_type.name,
+        "team_id": task_type.team_id,
+        "workflow": task_type.workflow,
+        "total_tasks": total_tasks,
+        "tasks_by_status": tasks_by_status,
+    }
+
+
+@router.post("/{task_type_id}/migrate", response_model=MessageResponse)
+async def migrate_tasks_to_type(
+    task_type_id: int,
+    migration: TaskTypeMigrationRequest,
+    db: DbSession,
+    current_user: AdminUser,
+) -> MessageResponse:
+    """
+    Migrate all tasks from one task type to another (admin only).
+    Used before deleting a task type.
+    """
+    # Verify source task type exists
+    source_result = await db.execute(select(TaskType).where(TaskType.id == task_type_id))
+    source_type = source_result.scalar_one_or_none()
+    
+    if source_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source task type not found",
+        )
+    
+    # Verify target task type exists
+    target_result = await db.execute(select(TaskType).where(TaskType.id == migration.target_task_type_id))
+    target_type = target_result.scalar_one_or_none()
+    
+    if target_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Target task type not found",
+        )
+    
+    if target_type.id == task_type_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot migrate to the same task type",
+        )
+    
+    # Build status mapping
+    status_map = {m.old_status: m.new_status for m in migration.status_mappings}
+    
+    # Validate all target statuses exist in target workflow
+    target_workflow_set = set(target_type.workflow)
+    for new_status in status_map.values():
+        if new_status not in target_workflow_set:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Target status '{new_status}' not in target workflow",
+            )
+    
+    # Get all tasks with this type
+    tasks_result = await db.execute(
+        select(Task).where(Task.task_type_id == task_type_id)
+    )
+    tasks = tasks_result.scalars().all()
+    
+    # Default status if no mapping provided
+    default_status = target_type.workflow[0] if target_type.workflow else "Backlog"
+    
+    migrated_count = 0
+    for task in tasks:
+        new_status = status_map.get(task.status, default_status)
+        task.task_type_id = target_type.id
+        task.team_id = target_type.team_id  # Also update team if different
+        task.status = new_status
+        migrated_count += 1
+    
+    await db.flush()
+    
+    return MessageResponse(message=f"Migrated {migrated_count} tasks to '{target_type.name}'")
+
+
 @router.delete("/{task_type_id}", response_model=MessageResponse)
 async def delete_task_type(
     task_type_id: int,
@@ -182,7 +313,7 @@ async def delete_task_type(
     """
     Delete a task type (admin only).
     
-    Note: This will fail if there are tasks using this type.
+    Note: This will fail if there are tasks using this type. Use the migrate endpoint first.
     """
     result = await db.execute(select(TaskType).where(TaskType.id == task_type_id))
     task_type = result.scalar_one_or_none()
@@ -193,10 +324,93 @@ async def delete_task_type(
             detail="Task type not found",
         )
     
+    # Check if there are any tasks using this type
+    task_count_result = await db.execute(
+        select(func.count()).select_from(Task).where(Task.task_type_id == task_type_id)
+    )
+    task_count = task_count_result.scalar() or 0
+    
+    if task_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot delete task type with {task_count} existing tasks. Migrate tasks first using POST /{task_type_id}/migrate",
+        )
+    
     name = task_type.name
     await db.delete(task_type)
     
     return MessageResponse(message=f"Task type '{name}' deleted successfully")
+
+
+@router.patch("/{task_type_id}/workflow", response_model=TaskTypeResponse)
+async def update_task_type_workflow(
+    task_type_id: int,
+    workflow: list[str],
+    status_mappings: list[TaskStatusMigration] = [],
+    db: DbSession = None,
+    current_user: AdminUser = None,
+) -> TaskTypeResponse:
+    """
+    Update a task type's workflow with automatic status migration (admin only).
+    
+    If statuses are removed, provide status_mappings to reassign tasks.
+    """
+    result = await db.execute(select(TaskType).where(TaskType.id == task_type_id))
+    task_type = result.scalar_one_or_none()
+    
+    if task_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task type not found",
+        )
+    
+    # Find removed statuses
+    old_workflow_set = set(task_type.workflow)
+    new_workflow_set = set(workflow)
+    removed_statuses = old_workflow_set - new_workflow_set
+    
+    # Build status mapping for removed statuses
+    status_map = {m.old_status: m.new_status for m in status_mappings}
+    
+    # Check if all removed statuses have mappings
+    for removed in removed_statuses:
+        if removed not in status_map:
+            # Check if any tasks are in this status
+            count_result = await db.execute(
+                select(func.count()).select_from(Task).where(
+                    Task.task_type_id == task_type_id,
+                    Task.status == removed,
+                )
+            )
+            count = count_result.scalar() or 0
+            if count > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Status '{removed}' has {count} tasks. Provide a status mapping.",
+                )
+    
+    # Validate all target statuses exist in new workflow
+    for new_status in status_map.values():
+        if new_status not in new_workflow_set:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Target status '{new_status}' not in new workflow",
+            )
+    
+    # Migrate tasks from removed statuses
+    for old_status, new_status in status_map.items():
+        await db.execute(
+            update(Task)
+            .where(Task.task_type_id == task_type_id, Task.status == old_status)
+            .values(status=new_status)
+        )
+    
+    # Update workflow
+    task_type.workflow = workflow
+    await db.flush()
+    await db.refresh(task_type)
+    
+    return TaskTypeResponse.model_validate(task_type)
 
 
 # --- Task Type Fields ---

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import type { ProjectTypeField } from '@/types';
+import { ArrowLeft, Plus, Trash2, Pencil, X, Check } from 'lucide-react';
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,7 +24,7 @@ export function ProjectDetailPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: { status?: string; description?: string }) =>
+    mutationFn: (data: { status?: string; description?: string; custom_data?: Record<string, unknown> }) =>
       api.projects.update(Number(id!), data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', id] });
@@ -137,23 +138,12 @@ export function ProjectDetailPage() {
 
           {/* Custom Fields */}
           {projectType?.fields && projectType.fields.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Project Metadata
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {projectType.fields.map((field) => (
-                  <div key={field.key}>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {field.label}
-                    </label>
-                    <div className="text-sm text-gray-900 dark:text-white">
-                      {project.custom_data?.[field.key] ? String(project.custom_data[field.key]) : '—'}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <CustomFieldsSection
+              fields={projectType.fields}
+              customData={project.custom_data || {}}
+              onSave={(newCustomData) => updateMutation.mutate({ custom_data: newCustomData })}
+              isLoading={updateMutation.isPending}
+            />
           )}
 
           {/* Dependencies */}
@@ -312,6 +302,238 @@ export function ProjectDetailPage() {
             </dl>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Custom Fields Section Component
+function CustomFieldsSection({
+  fields,
+  customData,
+  onSave,
+  isLoading,
+}: {
+  fields: ProjectTypeField[];
+  customData: Record<string, unknown>;
+  onSave: (data: Record<string, unknown>) => void;
+  isLoading: boolean;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<Record<string, unknown>>({});
+
+  useEffect(() => {
+    setEditData(customData);
+  }, [customData]);
+
+  const handleStartEdit = () => {
+    setEditData({ ...customData });
+    setIsEditing(true);
+  };
+
+  const handleCancel = () => {
+    setEditData(customData);
+    setIsEditing(false);
+  };
+
+  const handleSave = () => {
+    onSave(editData);
+    setIsEditing(false);
+  };
+
+  const handleFieldChange = (key: string, value: unknown) => {
+    setEditData((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const renderFieldValue = (field: ProjectTypeField, value: unknown) => {
+    if (value === null || value === undefined || value === '') {
+      return <span className="text-gray-400 italic">Not set</span>;
+    }
+
+    switch (field.field_type) {
+      case 'checkbox':
+        return value ? 'Yes' : 'No';
+      case 'multiselect':
+        return Array.isArray(value) ? value.join(', ') : String(value);
+      case 'url':
+        return (
+          <a
+            href={String(value)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary-600 dark:text-primary-400 hover:underline"
+          >
+            {String(value)}
+          </a>
+        );
+      case 'date':
+        return new Date(String(value)).toLocaleDateString();
+      default:
+        return String(value);
+    }
+  };
+
+  const renderFieldInput = (field: ProjectTypeField) => {
+    const value = editData[field.key];
+    const baseClass = "w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
+
+    switch (field.field_type) {
+      case 'text':
+        return (
+          <input
+            type="text"
+            value={String(value || '')}
+            onChange={(e) => handleFieldChange(field.key, e.target.value)}
+            className={baseClass}
+          />
+        );
+      case 'textarea':
+        return (
+          <textarea
+            value={String(value || '')}
+            onChange={(e) => handleFieldChange(field.key, e.target.value)}
+            rows={3}
+            className={baseClass}
+          />
+        );
+      case 'number':
+        return (
+          <input
+            type="number"
+            value={value !== undefined && value !== null ? String(value) : ''}
+            onChange={(e) => handleFieldChange(field.key, e.target.value ? Number(e.target.value) : null)}
+            className={baseClass}
+          />
+        );
+      case 'select':
+        return (
+          <select
+            value={String(value || '')}
+            onChange={(e) => handleFieldChange(field.key, e.target.value || null)}
+            className={baseClass}
+          >
+            <option value="">Select...</option>
+            {field.options?.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        );
+      case 'multiselect':
+        const selectedValues = Array.isArray(value) ? value : [];
+        return (
+          <div className="space-y-2">
+            {field.options?.map((opt) => (
+              <label key={opt} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedValues.includes(opt)}
+                  onChange={(e) => {
+                    const newValues = e.target.checked
+                      ? [...selectedValues, opt]
+                      : selectedValues.filter((v) => v !== opt);
+                    handleFieldChange(field.key, newValues);
+                  }}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">{opt}</span>
+              </label>
+            ))}
+          </div>
+        );
+      case 'url':
+        return (
+          <input
+            type="url"
+            value={String(value || '')}
+            onChange={(e) => handleFieldChange(field.key, e.target.value)}
+            placeholder="https://"
+            className={baseClass}
+          />
+        );
+      case 'date':
+        return (
+          <input
+            type="date"
+            value={value ? String(value).split('T')[0] : ''}
+            onChange={(e) => handleFieldChange(field.key, e.target.value || null)}
+            className={baseClass}
+          />
+        );
+      case 'checkbox':
+        return (
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={Boolean(value)}
+              onChange={(e) => handleFieldChange(field.key, e.target.checked)}
+              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5"
+            />
+            <span className="text-sm text-gray-700 dark:text-gray-300">Yes</span>
+          </label>
+        );
+      default:
+        return (
+          <input
+            type="text"
+            value={String(value || '')}
+            onChange={(e) => handleFieldChange(field.key, e.target.value)}
+            className={baseClass}
+          />
+        );
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Custom Fields
+        </h2>
+        {!isEditing ? (
+          <button
+            onClick={handleStartEdit}
+            className="inline-flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700"
+          >
+            <Pencil className="h-4 w-4" />
+            Edit
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCancel}
+              className="inline-flex items-center gap-1 px-2 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 rounded"
+            >
+              <X className="h-4 w-4" />
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isLoading}
+              className="inline-flex items-center gap-1 px-2 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50"
+            >
+              <Check className="h-4 w-4" />
+              Save
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {fields.sort((a, b) => a.order - b.order).map((field) => (
+          <div key={field.key} className={field.field_type === 'textarea' ? 'sm:col-span-2' : ''}>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {field.label}
+              {field.required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            {isEditing ? (
+              renderFieldInput(field)
+            ) : (
+              <div className="text-sm text-gray-900 dark:text-white py-2">
+                {renderFieldValue(field, customData[field.key])}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -126,8 +126,15 @@ class ApiClient {
     return response.data;
   }
 
-  async deleteTeam(id: number): Promise<MessageResponse> {
-    const response = await this.client.delete<MessageResponse>(`/teams/${id}`);
+  async getTeamStats(id: number): Promise<{ team_id: number; team_name: string; task_count: number; task_type_count: number; is_unassigned_team: boolean }> {
+    const response = await this.client.get(`/teams/${id}/stats`);
+    return response.data;
+  }
+
+  async deleteTeam(id: number, reassignTasksTo?: number): Promise<MessageResponse> {
+    const response = await this.client.delete<MessageResponse>(`/teams/${id}`, {
+      params: reassignTasksTo ? { reassign_tasks_to: reassignTasksTo } : undefined,
+    });
     return response.data;
   }
 
@@ -189,6 +196,19 @@ class ApiClient {
 
   async updateProjectType(id: number, data: Partial<ProjectType>): Promise<ProjectType> {
     const response = await this.client.patch<ProjectType>(`/project-types/${id}`, data);
+    return response.data;
+  }
+
+  async getProjectTypeStats(id: number): Promise<{ project_type_id: number; project_type_name: string; workflow: string[]; total_projects: number; projects_by_status: Record<string, number> }> {
+    const response = await this.client.get(`/project-types/${id}/stats`);
+    return response.data;
+  }
+
+  async migrateProjectType(id: number, targetTypeId: number, statusMappings: Array<{ old_status: string; new_status: string }>): Promise<MessageResponse> {
+    const response = await this.client.post<MessageResponse>(`/project-types/${id}/migrate`, {
+      target_project_type_id: targetTypeId,
+      status_mappings: statusMappings,
+    });
     return response.data;
   }
 
@@ -263,6 +283,19 @@ class ApiClient {
 
   async updateTaskType(id: number, data: Partial<TaskType>): Promise<TaskType> {
     const response = await this.client.patch<TaskType>(`/task-types/${id}`, data);
+    return response.data;
+  }
+
+  async getTaskTypeStats(id: number): Promise<{ task_type_id: number; task_type_name: string; team_id: number; workflow: string[]; total_tasks: number; tasks_by_status: Record<string, number> }> {
+    const response = await this.client.get(`/task-types/${id}/stats`);
+    return response.data;
+  }
+
+  async migrateTaskType(id: number, targetTypeId: number, statusMappings: Array<{ old_status: string; new_status: string }>): Promise<MessageResponse> {
+    const response = await this.client.post<MessageResponse>(`/task-types/${id}/migrate`, {
+      target_task_type_id: targetTypeId,
+      status_mappings: statusMappings,
+    });
     return response.data;
   }
 
@@ -388,6 +421,34 @@ class ApiClient {
     create: (data: Partial<ProjectType>) => this.createProjectType(data),
     update: (id: number, data: Partial<ProjectType>) => this.updateProjectType(id, data),
     delete: (id: number) => this.deleteProjectType(id),
+    getStats: (id: number) => this.getProjectTypeStats(id),
+    migrate: (id: number, targetTypeId: number, statusMappings: Array<{ old_status: string; new_status: string }>) =>
+      this.migrateProjectType(id, targetTypeId, statusMappings),
+    // Field management
+    addField: async (projectTypeId: number, data: {
+      key: string;
+      label: string;
+      field_type: string;
+      options?: string[];
+      required?: boolean;
+      order?: number;
+    }) => {
+      const response = await this.client.post(`/project-types/${projectTypeId}/fields`, data);
+      return response.data;
+    },
+    updateField: async (projectTypeId: number, fieldId: number, data: {
+      label?: string;
+      options?: string[];
+      required?: boolean;
+      order?: number;
+    }) => {
+      const response = await this.client.patch(`/project-types/${projectTypeId}/fields/${fieldId}`, data);
+      return response.data;
+    },
+    deleteField: async (projectTypeId: number, fieldId: number) => {
+      const response = await this.client.delete(`/project-types/${projectTypeId}/fields/${fieldId}`);
+      return response.data;
+    },
   };
 
   tasks = {
@@ -406,6 +467,9 @@ class ApiClient {
     create: (teamId: number, data: Partial<TaskType>) => this.createTaskType(teamId, data),
     update: (id: number, data: Partial<TaskType>) => this.updateTaskType(id, data),
     delete: (id: number) => this.deleteTaskType(id),
+    getStats: (id: number) => this.getTaskTypeStats(id),
+    migrate: (id: number, targetTypeId: number, statusMappings: Array<{ old_status: string; new_status: string }>) =>
+      this.migrateTaskType(id, targetTypeId, statusMappings),
   };
 
   releases = {
@@ -430,7 +494,8 @@ class ApiClient {
     get: (id: number) => this.getTeam(id),
     create: (data: Partial<Team>) => this.createTeam(data),
     update: (id: number, data: Partial<Team>) => this.updateTeam(id, data),
-    delete: (id: number) => this.deleteTeam(id),
+    delete: (id: number, reassignTasksTo?: number) => this.deleteTeam(id, reassignTasksTo),
+    getStats: (id: number) => this.getTeamStats(id),
   };
 }
 

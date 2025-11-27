@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
-import { Project, ProjectType } from '@/types';
-import { Plus, FolderKanban, ExternalLink } from 'lucide-react';
+import type { Project, ProjectType, ProjectTypeField } from '@/types';
+import { Plus, FolderKanban, ExternalLink, X } from 'lucide-react';
 
 export function ProjectsPage() {
   const queryClient = useQueryClient();
@@ -213,29 +213,159 @@ function ProjectModal({
   projectTypes: ProjectType[];
   themes: { id: number; title: string }[];
   onClose: () => void;
-  onSubmit: (data: { title: string; description?: string; project_type_id: number; theme_id?: number }) => void;
+  onSubmit: (data: { title: string; description?: string; project_type_id: number; theme_id?: number; custom_data?: Record<string, unknown> }) => void;
   isLoading: boolean;
 }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [projectTypeId, setProjectTypeId] = useState<number>(projectTypes[0]?.id || 0);
   const [themeId, setThemeId] = useState<number | null>(null);
+  const [customData, setCustomData] = useState<Record<string, unknown>>({});
+
+  // Fetch full project type with fields when selection changes
+  const { data: selectedProjectType } = useQuery({
+    queryKey: ['projectType', projectTypeId],
+    queryFn: () => projectTypeId ? api.projectTypes.get(projectTypeId) : null,
+    enabled: !!projectTypeId,
+  });
+
+  // Reset custom data when project type changes
+  useEffect(() => {
+    setCustomData({});
+  }, [projectTypeId]);
+
+  const handleCustomFieldChange = (key: string, value: unknown) => {
+    setCustomData((prev) => ({ ...prev, [key]: value }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ 
-      title, 
-      description: description || undefined, 
+    onSubmit({
+      title,
+      description: description || undefined,
       project_type_id: projectTypeId,
       theme_id: themeId || undefined,
+      custom_data: Object.keys(customData).length > 0 ? customData : undefined,
     });
   };
+
+  const renderCustomFieldInput = (field: ProjectTypeField) => {
+    const value = customData[field.key];
+    const baseClass = "w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
+
+    switch (field.field_type) {
+      case 'text':
+        return (
+          <input
+            type="text"
+            value={String(value || '')}
+            onChange={(e) => handleCustomFieldChange(field.key, e.target.value)}
+            className={baseClass}
+          />
+        );
+      case 'textarea':
+        return (
+          <textarea
+            value={String(value || '')}
+            onChange={(e) => handleCustomFieldChange(field.key, e.target.value)}
+            rows={3}
+            className={baseClass}
+          />
+        );
+      case 'number':
+        return (
+          <input
+            type="number"
+            value={value !== undefined && value !== null ? String(value) : ''}
+            onChange={(e) => handleCustomFieldChange(field.key, e.target.value ? Number(e.target.value) : null)}
+            className={baseClass}
+          />
+        );
+      case 'select':
+        return (
+          <select
+            value={String(value || '')}
+            onChange={(e) => handleCustomFieldChange(field.key, e.target.value || null)}
+            className={baseClass}
+          >
+            <option value="">Select...</option>
+            {field.options?.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        );
+      case 'multiselect':
+        const selectedValues = Array.isArray(value) ? value : [];
+        return (
+          <div className="space-y-1 p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 max-h-32 overflow-y-auto">
+            {field.options?.map((opt) => (
+              <label key={opt} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedValues.includes(opt)}
+                  onChange={(e) => {
+                    const newValues = e.target.checked
+                      ? [...selectedValues, opt]
+                      : selectedValues.filter((v) => v !== opt);
+                    handleCustomFieldChange(field.key, newValues);
+                  }}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">{opt}</span>
+              </label>
+            ))}
+          </div>
+        );
+      case 'url':
+        return (
+          <input
+            type="url"
+            value={String(value || '')}
+            onChange={(e) => handleCustomFieldChange(field.key, e.target.value)}
+            placeholder="https://"
+            className={baseClass}
+          />
+        );
+      case 'date':
+        return (
+          <input
+            type="date"
+            value={value ? String(value).split('T')[0] : ''}
+            onChange={(e) => handleCustomFieldChange(field.key, e.target.value || null)}
+            className={baseClass}
+          />
+        );
+      case 'checkbox':
+        return (
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={Boolean(value)}
+              onChange={(e) => handleCustomFieldChange(field.key, e.target.checked)}
+              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-5 w-5"
+            />
+            <span className="text-sm text-gray-700 dark:text-gray-300">Yes</span>
+          </label>
+        );
+      default:
+        return (
+          <input
+            type="text"
+            value={String(value || '')}
+            onChange={(e) => handleCustomFieldChange(field.key, e.target.value)}
+            className={baseClass}
+          />
+        );
+    }
+  };
+
+  const customFields = selectedProjectType?.fields || [];
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-screen items-center justify-center p-4">
         <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-        <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+        <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Create Project
           </h2>
@@ -292,6 +422,27 @@ function ProjectModal({
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
             </div>
+
+            {/* Custom Fields */}
+            {customFields.length > 0 && (
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Custom Fields
+                </h3>
+                <div className="space-y-4">
+                  {customFields.sort((a, b) => a.order - b.order).map((field) => (
+                    <div key={field.key}>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {field.label}
+                        {field.required && <span className="text-red-500 ml-1">*</span>}
+                      </label>
+                      {renderCustomFieldInput(field)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end space-x-3 pt-4">
               <button
                 type="button"
