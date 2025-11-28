@@ -120,6 +120,8 @@ class TaskUpdate(CoreModel):
     title: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     project_id: int | None = None
+    team_id: int | None = None
+    task_type_id: int | None = None
     release_id: int | None = None
     status: str | None = None
     estimation: float | None = None

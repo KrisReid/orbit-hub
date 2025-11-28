@@ -10,6 +10,7 @@ import { Layout } from '@/components/Layout';
 import { LoginPage } from '@/pages/LoginPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ThemesPage } from '@/pages/ThemesPage';
+import { ThemeDetailPage } from '@/pages/ThemeDetailPage';
 import { ProjectsPage } from '@/pages/ProjectsPage';
 import { ProjectDetailPage } from '@/pages/ProjectDetailPage';
 import { BoardPage } from '@/pages/BoardPage';
@@ -64,6 +65,7 @@ function AppContent() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="themes" element={<ThemesPage />} />
+        <Route path="themes/:id" element={<ThemeDetailPage />} />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="projects/:id" element={<ProjectDetailPage />} />
         <Route path="board" element={<BoardPage />} />

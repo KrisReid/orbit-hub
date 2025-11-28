@@ -5,6 +5,32 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Core PM</title>
+    <script>
+      // Theme initialization - runs before page renders to prevent flash
+      (function() {
+        // Start with no dark class (light mode default)
+        document.documentElement.classList.remove('dark');
+        
+        try {
+          var stored = localStorage.getItem('core-pm-theme');
+          if (stored) {
+            var data = JSON.parse(stored);
+            var theme = data.state && data.state.theme;
+            
+            if (theme === 'dark') {
+              document.documentElement.classList.add('dark');
+            } else if (theme === 'system') {
+              if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.classList.add('dark');
+              }
+            }
+            // 'light' or undefined = no dark class
+          }
+        } catch (e) {
+          // Parsing error = use light mode
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

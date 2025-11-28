@@ -10,6 +10,7 @@ import {
   UsersRound,
   FolderKanban,
   ListTodo,
+  Target,
   Plus,
   Trash2,
   Pencil,
@@ -38,6 +39,7 @@ export function SettingsPage() {
   const navItems = [
     { to: 'users', label: 'Users', icon: Users },
     { to: 'teams', label: 'Teams', icon: UsersRound },
+    { to: 'themes', label: 'Themes', icon: Target },
     { to: 'project-types', label: 'Project Types', icon: FolderKanban },
     { to: 'task-types', label: 'Task Types', icon: ListTodo },
   ];
@@ -73,6 +75,7 @@ export function SettingsPage() {
           <Route path="/" element={<Navigate to="users" replace />} />
           <Route path="users" element={<UsersSettings />} />
           <Route path="teams" element={<TeamsSettings />} />
+          <Route path="themes" element={<ThemesSettings />} />
           <Route path="project-types" element={<ProjectTypesSettings />} />
           <Route path="task-types" element={<TaskTypesSettings />} />
         </Routes>
@@ -497,6 +500,169 @@ function TeamDeleteModal({
               {isLoading ? 'Deleting...' : 'Delete Team'}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ThemesSettings() {
+  const [statuses, setStatuses] = useState<string[]>(['active', 'completed', 'archived']);
+  const [newStatus, setNewStatus] = useState('');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  const handleAddStatus = () => {
+    if (newStatus.trim() && !statuses.includes(newStatus.trim().toLowerCase())) {
+      setStatuses([...statuses, newStatus.trim().toLowerCase()]);
+      setNewStatus('');
+    }
+  };
+
+  const handleRemoveStatus = (index: number) => {
+    if (statuses.length > 1) {
+      setStatuses(statuses.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleEditStatus = (index: number) => {
+    setEditingIndex(index);
+    setEditValue(statuses[index]);
+  };
+
+  const handleSaveEdit = () => {
+    if (editingIndex !== null && editValue.trim()) {
+      const newStatuses = [...statuses];
+      newStatuses[editingIndex] = editValue.trim().toLowerCase();
+      setStatuses(newStatuses);
+      setEditingIndex(null);
+      setEditValue('');
+    }
+  };
+
+  const handleMoveUp = (index: number) => {
+    if (index > 0) {
+      const newStatuses = [...statuses];
+      [newStatuses[index - 1], newStatuses[index]] = [newStatuses[index], newStatuses[index - 1]];
+      setStatuses(newStatuses);
+    }
+  };
+
+  const handleMoveDown = (index: number) => {
+    if (index < statuses.length - 1) {
+      const newStatuses = [...statuses];
+      [newStatuses[index], newStatuses[index + 1]] = [newStatuses[index + 1], newStatuses[index]];
+      setStatuses(newStatuses);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Themes Configuration</h2>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 className="font-medium text-gray-900 dark:text-white mb-4">Theme Statuses</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          Define the lifecycle stages for strategic initiatives. Drag to reorder or add new statuses as needed.
+        </p>
+        
+        <div className="space-y-2 mb-4">
+          {statuses.map((status, index) => (
+            <div
+              key={`${status}-${index}`}
+              className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col">
+                  <button
+                    onClick={() => handleMoveUp(index)}
+                    disabled={index === 0}
+                    className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <ChevronUp className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={() => handleMoveDown(index)}
+                    disabled={index === statuses.length - 1}
+                    className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                </div>
+                <GripVertical className="h-4 w-4 text-gray-400" />
+                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 text-xs font-medium text-gray-600 dark:text-gray-300">
+                  {index + 1}
+                </div>
+                {editingIndex === index ? (
+                  <input
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit()}
+                    onBlur={handleSaveEdit}
+                    autoFocus
+                    className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  />
+                ) : (
+                  <span className="font-medium text-gray-900 dark:text-white capitalize">{status}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                  index === 0
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                    : index === statuses.length - 1
+                    ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                }`}>
+                  {index === 0 ? 'Default' : index === statuses.length - 1 ? 'End State' : ''}
+                </span>
+                <button
+                  onClick={() => handleEditStatus(index)}
+                  className="p-1 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                {statuses.length > 1 && (
+                  <button
+                    onClick={() => handleRemoveStatus(index)}
+                    className="p-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Add new status */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newStatus}
+            onChange={(e) => setNewStatus(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleAddStatus()}
+            placeholder="Add new status..."
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+          />
+          <button
+            onClick={handleAddStatus}
+            disabled={!newStatus.trim()}
+            className="inline-flex items-center px-3 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add
+          </button>
+        </div>
+
+        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <p className="text-sm text-blue-800 dark:text-blue-300">
+            <strong>Note:</strong> The first status is used as the default for new themes. The last status represents the end state.
+            Themes can be transitioned through the workflow on the theme detail page.
+          </p>
         </div>
       </div>
     </div>

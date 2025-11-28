@@ -273,12 +273,42 @@ async def update_task(
             detail="Task not found",
         )
     
-    # Validate status against workflow if being changed
-    if task_in.status is not None:
-        if task_in.status not in task.task_type.workflow:
+    # Determine the effective team_id and task_type_id
+    effective_team_id = task_in.team_id if task_in.team_id is not None else task.team_id
+    effective_task_type_id = task_in.task_type_id if task_in.task_type_id is not None else task.task_type_id
+    
+    # Validate team if being changed
+    if task_in.team_id is not None:
+        team_result = await db.execute(select(Team).where(Team.id == task_in.team_id))
+        if team_result.scalar_one_or_none() is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status. Must be one of: {task.task_type.workflow}",
+                detail="Team not found",
+            )
+    
+    # Validate task type if being changed - must belong to the effective team
+    task_type_for_validation = task.task_type
+    if task_in.task_type_id is not None or task_in.team_id is not None:
+        tt_result = await db.execute(
+            select(TaskType).where(
+                TaskType.id == effective_task_type_id,
+                TaskType.team_id == effective_team_id,
+            )
+        )
+        task_type_for_validation = tt_result.scalar_one_or_none()
+        
+        if task_type_for_validation is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid task type for this team",
+            )
+    
+    # Validate status against the effective task type's workflow
+    if task_in.status is not None:
+        if task_in.status not in task_type_for_validation.workflow:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status. Must be one of: {task_type_for_validation.workflow}",
             )
     
     # Validate project if being changed
