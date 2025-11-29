@@ -179,17 +179,35 @@ async def update_project(
             detail="Project not found",
         )
     
-    # Validate status against workflow if being changed
-    if project_in.status is not None:
+    # Validate project_type if being changed
+    new_project_type = None
+    if project_in.project_type_id is not None and project_in.project_type_id != project.project_type_id:
         pt_result = await db.execute(
-            select(ProjectType).where(ProjectType.id == project.project_type_id)
+            select(ProjectType).where(ProjectType.id == project_in.project_type_id)
         )
-        project_type = pt_result.scalar_one()
-        
-        if project_in.status not in project_type.workflow:
+        new_project_type = pt_result.scalar_one_or_none()
+        if new_project_type is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status. Must be one of: {project_type.workflow}",
+                detail="Invalid project type",
+            )
+    
+    # Validate status against workflow if being changed
+    if project_in.status is not None:
+        # Use new project type's workflow if project type is being changed, otherwise use current
+        if new_project_type is not None:
+            workflow = new_project_type.workflow
+        else:
+            pt_result = await db.execute(
+                select(ProjectType).where(ProjectType.id == project.project_type_id)
+            )
+            project_type = pt_result.scalar_one()
+            workflow = project_type.workflow
+        
+        if project_in.status not in workflow:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status. Must be one of: {workflow}",
             )
     
     # Validate theme if being changed

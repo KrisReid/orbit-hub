@@ -117,6 +117,7 @@ class ProjectUpdate(CoreModel):
     title: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
     theme_id: int | None = None
+    project_type_id: int | None = None
     status: str | None = None
     custom_data: dict[str, Any] | None = None
 
