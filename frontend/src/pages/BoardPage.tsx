@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
@@ -401,8 +401,15 @@ function CreateTaskModal({
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [taskTypeId, setTaskTypeId] = useState<number>(taskTypes[0]?.id || 0);
+  const [taskTypeId, setTaskTypeId] = useState<number>(0);
   const [projectId, setProjectId] = useState<number | null>(null);
+
+  // Update taskTypeId when taskTypes changes (e.g., when query data arrives)
+  useEffect(() => {
+    if (taskTypes.length > 0 && (taskTypeId === 0 || !taskTypes.find(tt => tt.id === taskTypeId))) {
+      setTaskTypeId(taskTypes[0].id);
+    }
+  }, [taskTypes, taskTypeId]);
 
   const handleSubmit = () => {
     onSubmit({

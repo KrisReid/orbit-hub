@@ -220,54 +220,67 @@ async def delete_team(
             detail="Cannot delete the Unassigned team",
         )
     
-    # Get or create the target team for reassignment
-    if reassign_tasks_to is not None:
-        target_result = await db.execute(select(Team).where(Team.id == reassign_tasks_to))
-        target_team = target_result.scalar_one_or_none()
-        if target_team is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Target team for reassignment not found",
-            )
-        if target_team.id == team_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot reassign tasks to the team being deleted",
-            )
-    else:
-        target_team = await get_or_create_unassigned_team(db)
-    
-    # Get a task type from the target team (or create a default one)
-    target_task_type_result = await db.execute(
-        select(TaskType).where(TaskType.team_id == target_team.id).limit(1)
+    # Check if there are tasks to reassign
+    task_count_result = await db.execute(
+        select(func.count()).select_from(Task).where(Task.team_id == team_id)
     )
-    target_task_type = target_task_type_result.scalar_one_or_none()
-    
-    if target_task_type is None:
-        # Create a default task type for the target team
-        target_task_type = TaskType(
-            team_id=target_team.id,
-            name="Task",
-            slug="task",
-            workflow=["Backlog", "To Do", "In Progress", "Done"],
-        )
-        db.add(target_task_type)
-        await db.flush()
-    
-    # Reassign all tasks from this team to the target team
-    # Also update task_type_id to the target team's task type
-    await db.execute(
-        update(Task)
-        .where(Task.team_id == team_id)
-        .values(team_id=target_team.id, task_type_id=target_task_type.id, status=target_task_type.workflow[0] if target_task_type.workflow else "Backlog")
-    )
+    task_count = task_count_result.scalar() or 0
     
     team_name = team.name
+    target_team_name = None
+    
+    # Only handle task reassignment if there are tasks to reassign
+    if task_count > 0:
+        # Get or create the target team for reassignment
+        if reassign_tasks_to is not None:
+            target_result = await db.execute(select(Team).where(Team.id == reassign_tasks_to))
+            target_team = target_result.scalar_one_or_none()
+            if target_team is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Target team for reassignment not found",
+                )
+            if target_team.id == team_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot reassign tasks to the team being deleted",
+                )
+        else:
+            target_team = await get_or_create_unassigned_team(db)
+        
+        # Get a task type from the target team (or create a default one)
+        target_task_type_result = await db.execute(
+            select(TaskType).where(TaskType.team_id == target_team.id).limit(1)
+        )
+        target_task_type = target_task_type_result.scalar_one_or_none()
+        
+        if target_task_type is None:
+            # Create a default task type for the target team
+            target_task_type = TaskType(
+                team_id=target_team.id,
+                name="Task",
+                slug="task",
+                workflow=["Backlog", "To Do", "In Progress", "Done"],
+            )
+            db.add(target_task_type)
+            await db.flush()
+        
+        # Reassign all tasks from this team to the target team
+        # Also update task_type_id to the target team's task type
+        await db.execute(
+            update(Task)
+            .where(Task.team_id == team_id)
+            .values(team_id=target_team.id, task_type_id=target_task_type.id, status=target_task_type.workflow[0] if target_task_type.workflow else "Backlog")
+        )
+        target_team_name = target_team.name
     
     # Delete the team (cascade will delete task_types and team_members)
     await db.delete(team)
     
-    return MessageResponse(message=f"Team '{team_name}' deleted successfully. Tasks reassigned to '{target_team.name}'.")
+    if target_team_name:
+        return MessageResponse(message=f"Team '{team_name}' deleted successfully. Tasks reassigned to '{target_team_name}'.")
+    else:
+        return MessageResponse(message=f"Team '{team_name}' deleted successfully.")
 
 
 # --- Team Members ---
