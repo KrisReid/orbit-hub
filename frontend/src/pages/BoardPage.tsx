@@ -54,7 +54,7 @@ export function BoardPage() {
     enabled: !!selectedTeam?.id,
   });
 
-  const { data: tasks, isLoading } = useQuery({
+  const { data: tasks } = useQuery({
     queryKey: ['tasks', selectedTeam?.id],
     queryFn: () => api.tasks.list({ team_id: selectedTeam?.id, page_size: 100 }),
     enabled: !!selectedTeam?.id,

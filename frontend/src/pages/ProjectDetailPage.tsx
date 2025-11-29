@@ -3,9 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import type { ProjectTypeField, Task } from '@/types';
-import { Plus, ExternalLink, ChevronDown } from 'lucide-react';
+import { ExternalLink, ChevronDown } from 'lucide-react';
 import { TaskEditModal } from '@/components/TaskEditModal';
-import { useClickOutside } from '@/hooks';
 import {
   DetailPageLayout,
   ContentCard,
