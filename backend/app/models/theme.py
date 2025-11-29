@@ -1,11 +1,10 @@
 """
 Theme model for strategic initiatives.
 """
-import enum
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List
 
-from sqlalchemy import DateTime, Enum, String, Text, func
+from sqlalchemy import DateTime, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -14,11 +13,8 @@ if TYPE_CHECKING:
     from app.models.project import Project
 
 
-class ThemeStatus(str, enum.Enum):
-    """Theme status enumeration."""
-    active = "active"
-    completed = "completed"
-    archived = "archived"
+# Default theme statuses (can be extended via frontend settings)
+DEFAULT_THEME_STATUSES = ["active", "completed", "archived"]
 
 
 class Theme(Base):
@@ -29,9 +25,9 @@ class Theme(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[ThemeStatus] = mapped_column(
-        Enum(ThemeStatus),
-        default=ThemeStatus.active,
+    status: Mapped[str] = mapped_column(
+        String(50),
+        default="active",
         nullable=False,
     )
     

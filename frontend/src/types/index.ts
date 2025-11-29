@@ -44,13 +44,14 @@ export interface TeamMember {
 }
 
 // Theme types
-export type ThemeStatus = 'active' | 'completed' | 'archived';
+// ThemeStatus is now a string to support custom workflow statuses
+export type ThemeStatus = string;
 
 export interface Theme {
   id: number;
   title: string;
   description: string | null;
-  status: ThemeStatus;
+  status: string;
   created_at: string;
   updated_at: string;
 }

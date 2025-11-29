@@ -31,8 +31,13 @@ export function ProjectsPage() {
 
   const createMutation = useMutation({
     mutationFn: api.projects.create,
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      // Invalidate theme queries so new projects appear in theme detail pages
+      if (data?.theme_id) {
+        queryClient.invalidateQueries({ queryKey: ['theme', String(data.theme_id)] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['themes'] });
       setShowModal(false);
     },
   });

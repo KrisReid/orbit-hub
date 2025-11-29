@@ -3,13 +3,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
 import { Theme, ThemeStatus } from '@/types';
-import { Plus, Target, ExternalLink } from 'lucide-react';
+import { ConfirmModal } from '@/components/ConfirmModal';
+import { Plus, Target, ExternalLink, Trash2 } from 'lucide-react';
 
 export function ThemesPage() {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [themeToDelete, setThemeToDelete] = useState<{ id: number; title: string } | null>(null);
 
   const { data: themes, isLoading } = useQuery({
     queryKey: ['themes', { include_archived: showArchived, status: filterStatus }],
@@ -21,6 +23,14 @@ export function ThemesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['themes'] });
       setShowModal(false);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.themes.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['themes'] });
+      setThemeToDelete(null);
     },
   });
 
@@ -147,12 +157,22 @@ export function ThemesPage() {
                   {new Date(theme.created_at).toLocaleDateString()}
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <Link
-                    to={`/themes/${theme.id}`}
-                    className="text-primary-600 hover:text-primary-700 dark:text-primary-400"
-                  >
-                    <ExternalLink className="h-5 w-5" />
-                  </Link>
+                  <div className="flex items-center justify-end gap-2">
+                    <Link
+                      to={`/themes/${theme.id}`}
+                      className="p-1 text-primary-600 hover:text-primary-700 dark:text-primary-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                      title="View details"
+                    >
+                      <ExternalLink className="h-5 w-5" />
+                    </Link>
+                    <button
+                      onClick={() => setThemeToDelete({ id: theme.id, title: theme.title })}
+                      className="p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                      title="Delete theme"
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -178,6 +198,22 @@ export function ThemesPage() {
           isLoading={createMutation.isPending}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!themeToDelete}
+        onClose={() => setThemeToDelete(null)}
+        onConfirm={() => {
+          if (themeToDelete) {
+            deleteMutation.mutate(themeToDelete.id);
+          }
+        }}
+        title="Delete Theme"
+        message={`Are you sure you want to delete "${themeToDelete?.title}"? This action cannot be undone.`}
+        confirmText="Delete"
+        variant="danger"
+        isLoading={deleteMutation.isPending}
+      />
     </div>
   );
 }

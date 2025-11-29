@@ -6,7 +6,7 @@ and available for Alembic migrations.
 """
 from app.models.user import User, UserRole
 from app.models.team import Team, TeamMember
-from app.models.theme import Theme, ThemeStatus
+from app.models.theme import Theme, DEFAULT_THEME_STATUSES
 from app.models.project import (
     Project,
     ProjectType,
@@ -32,7 +32,7 @@ __all__ = [
     "TeamMember",
     # Theme
     "Theme",
-    "ThemeStatus",
+    "DEFAULT_THEME_STATUSES",
     # Project
     "Project",
     "ProjectType",

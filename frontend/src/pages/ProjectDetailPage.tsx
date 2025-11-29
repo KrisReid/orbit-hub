@@ -28,6 +28,13 @@ export function ProjectDetailPage() {
       api.projects.update(Number(id!), data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', id] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      // Invalidate theme queries so project status updates appear live in theme detail pages
+      if (project?.theme_id) {
+        queryClient.invalidateQueries({ queryKey: ['theme', String(project.theme_id)] });
+      }
+      // Also invalidate the themes list in case status changes affect displays there
+      queryClient.invalidateQueries({ queryKey: ['themes'] });
       setEditingDescription(false);
     },
   });

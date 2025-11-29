@@ -28,9 +28,8 @@ async def list_themes(
     count_query = select(func.count()).select_from(Theme)
     
     if not include_archived:
-        from app.models.theme import ThemeStatus
-        base_query = base_query.where(Theme.status != ThemeStatus.archived)
-        count_query = count_query.where(Theme.status != ThemeStatus.archived)
+        base_query = base_query.where(Theme.status != "archived")
+        count_query = count_query.where(Theme.status != "archived")
     
     total = (await db.execute(count_query)).scalar() or 0
     

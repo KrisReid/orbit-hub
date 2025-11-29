@@ -829,25 +829,53 @@ function TaskEditModal({
 
               {/* Right Column - Status, Estimation, Release, GitHub, Dependencies */}
               <div className="space-y-6">
-                {/* Status */}
+                {/* Status - Workflow Style */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                    Status
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                    Workflow State
                   </label>
-                  <div className="relative">
-                    <select
-                      value={status}
-                      onChange={(e) => {
-                        setStatus(e.target.value);
-                        handleFieldChange('status', e.target.value);
-                      }}
-                      className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm appearance-none cursor-pointer"
-                    >
-                      {workflow.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                  <div className="space-y-2">
+                    {workflow.map((s, index) => {
+                      const currentIndex = workflow.indexOf(status);
+                      const stepState = index < currentIndex ? 'completed' : index === currentIndex ? 'current' : 'upcoming';
+                      
+                      return (
+                        <button
+                          key={s}
+                          onClick={() => {
+                            setStatus(s);
+                            handleFieldChange('status', s);
+                          }}
+                          disabled={updateMutation.isPending}
+                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors disabled:opacity-50 ${
+                            stepState === 'current'
+                              ? 'bg-primary-50 dark:bg-primary-900/30'
+                              : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                          }`}
+                        >
+                          <div
+                            className={`h-3 w-3 rounded-full flex-shrink-0 ${
+                              stepState === 'completed'
+                                ? 'bg-green-500'
+                                : stepState === 'current'
+                                ? 'bg-primary-600'
+                                : 'border-2 border-gray-300 dark:border-gray-500 bg-transparent'
+                            }`}
+                          />
+                          <span
+                            className={`text-sm font-medium ${
+                              stepState === 'completed'
+                                ? 'text-green-600 dark:text-green-400'
+                                : stepState === 'current'
+                                ? 'text-primary-600 dark:text-primary-400'
+                                : 'text-gray-500 dark:text-gray-400'
+                            }`}
+                          >
+                            {s}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

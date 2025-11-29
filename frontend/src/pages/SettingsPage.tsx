@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { useAuthStore } from '@/stores/auth';
 import type { ProjectTypeField, FieldType } from '@/types';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import {
   Settings,
   Users,
@@ -87,6 +88,7 @@ export function SettingsPage() {
 function UsersSettings() {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<{ id: number; name: string } | null>(null);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['users'],
@@ -161,9 +163,7 @@ function UsersSettings() {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <button
-                    onClick={() => {
-                      if (confirm('Delete this user?')) deleteMutation.mutate(user.id);
-                    }}
+                    onClick={() => setUserToDelete({ id: user.id, name: user.full_name })}
                     className="text-red-600 hover:text-red-700"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -182,6 +182,22 @@ function UsersSettings() {
           isLoading={createMutation.isPending}
         />
       )}
+
+      <ConfirmModal
+        isOpen={!!userToDelete}
+        onClose={() => setUserToDelete(null)}
+        onConfirm={() => {
+          if (userToDelete) {
+            deleteMutation.mutate(userToDelete.id);
+            setUserToDelete(null);
+          }
+        }}
+        title="Delete User"
+        message={`Are you sure you want to delete "${userToDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        variant="danger"
+        isLoading={deleteMutation.isPending}
+      />
     </div>
   );
 }
@@ -506,22 +522,66 @@ function TeamDeleteModal({
   );
 }
 
+const THEME_STATUSES_STORAGE_KEY = 'theme_workflow_statuses';
+const DEFAULT_THEME_STATUSES = ['active', 'completed', 'archived'];
+
 function ThemesSettings() {
-  const [statuses, setStatuses] = useState<string[]>(['active', 'completed', 'archived']);
+  const [statuses, setStatuses] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(THEME_STATUSES_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : DEFAULT_THEME_STATUSES;
+    } catch {
+      return DEFAULT_THEME_STATUSES;
+    }
+  });
   const [newStatus, setNewStatus] = useState('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Fetch all themes to check which statuses are in use
+  const { data: themes } = useQuery({
+    queryKey: ['themes', { include_archived: true }],
+    queryFn: () => api.themes.list({ include_archived: true }),
+  });
+
+  // Calculate which statuses are in use
+  const statusUsage = useMemo(() => {
+    const usage: Record<string, number> = {};
+    themes?.items?.forEach((theme) => {
+      const status = theme.status?.toLowerCase();
+      if (status) {
+        usage[status] = (usage[status] || 0) + 1;
+      }
+    });
+    return usage;
+  }, [themes]);
+
+  // Persist statuses to localStorage
+  const updateStatuses = (newStatuses: string[]) => {
+    setStatuses(newStatuses);
+    localStorage.setItem(THEME_STATUSES_STORAGE_KEY, JSON.stringify(newStatuses));
+  };
 
   const handleAddStatus = () => {
     if (newStatus.trim() && !statuses.includes(newStatus.trim().toLowerCase())) {
-      setStatuses([...statuses, newStatus.trim().toLowerCase()]);
+      updateStatuses([...statuses, newStatus.trim().toLowerCase()]);
       setNewStatus('');
     }
   };
 
   const handleRemoveStatus = (index: number) => {
+    const statusToRemove = statuses[index];
+    const usageCount = statusUsage[statusToRemove] || 0;
+    
+    if (usageCount > 0) {
+      alert(`Cannot remove "${statusToRemove}" - it is used by ${usageCount} theme(s). Change the theme status first.`);
+      return;
+    }
+    
     if (statuses.length > 1) {
-      setStatuses(statuses.filter((_, i) => i !== index));
+      updateStatuses(statuses.filter((_, i) => i !== index));
     }
   };
 
@@ -534,26 +594,53 @@ function ThemesSettings() {
     if (editingIndex !== null && editValue.trim()) {
       const newStatuses = [...statuses];
       newStatuses[editingIndex] = editValue.trim().toLowerCase();
-      setStatuses(newStatuses);
+      updateStatuses(newStatuses);
       setEditingIndex(null);
       setEditValue('');
     }
   };
 
-  const handleMoveUp = (index: number) => {
-    if (index > 0) {
-      const newStatuses = [...statuses];
-      [newStatuses[index - 1], newStatuses[index]] = [newStatuses[index], newStatuses[index - 1]];
-      setStatuses(newStatuses);
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+    // Add a slight delay to show the drag preview
+    setTimeout(() => {
+      const target = e.target as HTMLElement;
+      target.style.opacity = '0.5';
+    }, 0);
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    const target = e.target as HTMLElement;
+    target.style.opacity = '1';
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index);
     }
   };
 
-  const handleMoveDown = (index: number) => {
-    if (index < statuses.length - 1) {
-      const newStatuses = [...statuses];
-      [newStatuses[index], newStatuses[index + 1]] = [newStatuses[index + 1], newStatuses[index]];
-      setStatuses(newStatuses);
-    }
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) return;
+
+    const newStatuses = [...statuses];
+    const [draggedItem] = newStatuses.splice(draggedIndex, 1);
+    newStatuses.splice(dropIndex, 0, draggedItem);
+    updateStatuses(newStatuses);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   return (
@@ -572,26 +659,22 @@ function ThemesSettings() {
           {statuses.map((status, index) => (
             <div
               key={`${status}-${index}`}
-              className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
+              draggable={editingIndex !== index}
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, index)}
+              className={`flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg group cursor-grab active:cursor-grabbing transition-all ${
+                dragOverIndex === index
+                  ? 'ring-2 ring-primary-500 ring-offset-2 dark:ring-offset-gray-800'
+                  : ''
+              } ${
+                draggedIndex === index ? 'opacity-50' : ''
+              }`}
             >
               <div className="flex items-center gap-3">
-                <div className="flex flex-col">
-                  <button
-                    onClick={() => handleMoveUp(index)}
-                    disabled={index === 0}
-                    className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <ChevronUp className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={() => handleMoveDown(index)}
-                    disabled={index === statuses.length - 1}
-                    className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <ChevronDown className="h-3 w-3" />
-                  </button>
-                </div>
-                <GripVertical className="h-4 w-4 text-gray-400" />
+                <GripVertical className="h-4 w-4 text-gray-400 cursor-grab" />
                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 text-xs font-medium text-gray-600 dark:text-gray-300">
                   {index + 1}
                 </div>
@@ -610,6 +693,11 @@ function ThemesSettings() {
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {(statusUsage[status] || 0) > 0 && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                    {statusUsage[status]} theme{statusUsage[status] > 1 ? 's' : ''}
+                  </span>
+                )}
                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                   index === 0
                     ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
@@ -628,7 +716,13 @@ function ThemesSettings() {
                 {statuses.length > 1 && (
                   <button
                     onClick={() => handleRemoveStatus(index)}
-                    className="p-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                    disabled={(statusUsage[status] || 0) > 0}
+                    className={`p-1 transition-opacity ${
+                      (statusUsage[status] || 0) > 0
+                        ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-50'
+                        : 'text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100'
+                    }`}
+                    title={(statusUsage[status] || 0) > 0 ? `Cannot remove - used by ${statusUsage[status]} theme(s)` : 'Remove status'}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -933,6 +1027,7 @@ function ProjectTypeFieldsManager({
 }) {
   const [showAddField, setShowAddField] = useState(false);
   const [editingField, setEditingField] = useState<ProjectTypeField | null>(null);
+  const [fieldToDelete, setFieldToDelete] = useState<ProjectTypeField | null>(null);
 
   const FIELD_TYPES: { value: FieldType; label: string }[] = [
     { value: 'text', label: 'Text' },
@@ -996,11 +1091,7 @@ function ProjectTypeFieldsManager({
                   <Pencil className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={() => {
-                    if (confirm(`Delete field "${field.label}"?`)) {
-                      onDeleteField(field.id);
-                    }
-                  }}
+                  onClick={() => setFieldToDelete(field)}
                   className="p-1 text-red-400 hover:text-red-600"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -1024,6 +1115,23 @@ function ProjectTypeFieldsManager({
           isLoading={isLoading}
         />
       )}
+
+      {/* Delete Field Confirm Modal */}
+      <ConfirmModal
+        isOpen={!!fieldToDelete}
+        onClose={() => setFieldToDelete(null)}
+        onConfirm={() => {
+          if (fieldToDelete) {
+            onDeleteField(fieldToDelete.id);
+            setFieldToDelete(null);
+          }
+        }}
+        title="Delete Field"
+        message={`Are you sure you want to delete the field "${fieldToDelete?.label}"? This action cannot be undone.`}
+        confirmText="Delete"
+        variant="danger"
+        isLoading={isLoading}
+      />
 
       {/* Edit Field Modal */}
       {editingField && (

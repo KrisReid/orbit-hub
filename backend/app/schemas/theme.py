@@ -3,7 +3,6 @@ Theme Pydantic schemas.
 """
 from pydantic import Field
 
-from app.models.theme import ThemeStatus
 from app.schemas.base import CoreModel, TimestampMixin
 
 
@@ -17,7 +16,7 @@ class ThemeBase(CoreModel):
 class ThemeCreate(ThemeBase):
     """Schema for creating a theme."""
     
-    status: ThemeStatus = ThemeStatus.active
+    status: str = "active"
 
 
 class ThemeUpdate(CoreModel):
@@ -25,14 +24,14 @@ class ThemeUpdate(CoreModel):
     
     title: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
-    status: ThemeStatus | None = None
+    status: str | None = None
 
 
 class ThemeResponse(ThemeBase, TimestampMixin):
     """Theme response schema."""
     
     id: int
-    status: ThemeStatus
+    status: str
 
 
 class ThemeBrief(CoreModel):
@@ -40,7 +39,7 @@ class ThemeBrief(CoreModel):
     
     id: int
     title: str
-    status: ThemeStatus
+    status: str
 
 
 class ThemeWithProjects(ThemeResponse):

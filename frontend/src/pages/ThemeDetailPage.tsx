@@ -1,9 +1,23 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
-import { ThemeStatus } from '@/types';
-import { ArrowLeft, Trash2, FolderKanban } from 'lucide-react';
+import { ArrowLeft, Trash2, FolderKanban, Plus, X } from 'lucide-react';
+import { ConfirmModal } from '@/components/ConfirmModal';
+
+// Storage key for theme workflow (shared with SettingsPage)
+const THEME_STATUSES_STORAGE_KEY = 'theme_workflow_statuses';
+const DEFAULT_THEME_STATUSES = ['active', 'completed', 'archived'];
+
+// Get theme workflow from localStorage
+function getThemeWorkflow(): string[] {
+  try {
+    const saved = localStorage.getItem(THEME_STATUSES_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : DEFAULT_THEME_STATUSES;
+  } catch {
+    return DEFAULT_THEME_STATUSES;
+  }
+}
 
 export function ThemeDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -13,15 +27,40 @@ export function ThemeDetailPage() {
   const [editingDescription, setEditingDescription] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [showAddProjectModal, setShowAddProjectModal] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  // Get the workflow for themes from localStorage (synced with Settings)
+  // Must be called before any conditional returns to satisfy React's Rules of Hooks
+  const workflow = useMemo(() => getThemeWorkflow(), []);
 
   const { data: theme, isLoading } = useQuery({
     queryKey: ['theme', id],
     queryFn: () => api.themes.get(Number(id!)),
     enabled: !!id,
+    staleTime: 0, // Always fetch fresh data
+    refetchOnWindowFocus: true,
+  });
+
+  // Fetch all projects for the add modal
+  const { data: allProjectsData } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.projects.list({ page_size: 100 }),
+    enabled: showAddProjectModal,
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: { status?: ThemeStatus; title?: string; description?: string }) =>
+    mutationFn: (data: { status?: string; title?: string; description?: string }) =>
       api.themes.update(Number(id!), data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['theme', id] });
@@ -36,6 +75,27 @@ export function ThemeDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['themes'] });
       navigate('/themes');
+    },
+  });
+
+  // Mutation to add a project to this theme
+  const addProjectToThemeMutation = useMutation({
+    mutationFn: (projectId: number) =>
+      api.projects.update(projectId, { theme_id: Number(id!) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['theme', id] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setShowAddProjectModal(false);
+    },
+  });
+
+  // Mutation to remove a project from this theme
+  const removeProjectFromThemeMutation = useMutation({
+    mutationFn: (projectId: number) =>
+      api.projects.update(projectId, { theme_id: null }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['theme', id] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 
@@ -64,13 +124,29 @@ export function ThemeDetailPage() {
   };
 
   const handleDelete = () => {
-    if (confirm('Are you sure you want to delete this theme? This cannot be undone.')) {
-      deleteMutation.mutate();
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Theme',
+      message: 'Are you sure you want to delete this theme? This cannot be undone.',
+      onConfirm: () => {
+        deleteMutation.mutate();
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      },
+    });
   };
 
-  // Get the workflow for themes
-  const workflow: ThemeStatus[] = ['active', 'completed', 'archived'];
+  const handleRemoveProject = (project: { id: number; title: string }) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Remove Project',
+      message: `Remove "${project.title}" from this theme?`,
+      onConfirm: () => {
+        removeProjectFromThemeMutation.mutate(project.id);
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      },
+    });
+  };
+
   const currentStatusIndex = workflow.indexOf(theme.status);
 
   const getStepState = (stepIndex: number): 'completed' | 'current' | 'upcoming' => {
@@ -205,38 +281,61 @@ export function ThemeDetailPage() {
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Linked Projects ({theme.projects?.length || 0})
               </h2>
+              <button
+                onClick={() => setShowAddProjectModal(true)}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                Add Project
+              </button>
             </div>
             {theme.projects && theme.projects.length > 0 ? (
               <div className="space-y-2">
                 {theme.projects.map((project) => (
-                  <Link
+                  <div
                     key={project.id}
-                    to={`/projects/${project.id}`}
-                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 group"
                   >
-                    <div className="flex items-center gap-3">
+                    <Link
+                      to={`/projects/${project.id}`}
+                      className="flex items-center gap-3 flex-1"
+                    >
                       <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg">
                         <FolderKanban className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                       </div>
                       <div>
                         <p className="font-medium text-gray-900 dark:text-white">{project.title}</p>
                       </div>
+                    </Link>
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        project.status === 'Done'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                          : project.status === 'In Progress'
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                      }`}>
+                        {project.status}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRemoveProject(project);
+                        }}
+                        disabled={removeProjectFromThemeMutation.isPending}
+                        className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                        title="Remove from theme"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                      project.status === 'Done'
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                        : project.status === 'In Progress'
-                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                    }`}>
-                      {project.status}
-                    </span>
-                  </Link>
+                  </div>
                 ))}
               </div>
             ) : (
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                No projects linked to this theme yet. Create a project and select this theme to link it.
+                No projects linked to this theme yet. Click "Add Project" to link existing projects.
               </p>
             )}
           </div>
@@ -311,6 +410,100 @@ export function ThemeDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Add Project Modal */}
+      {showAddProjectModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Add Project to Theme
+              </h3>
+              <button
+                onClick={() => setShowAddProjectModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1">
+              {(() => {
+                const linkedProjectIds = new Set(theme.projects?.map(p => p.id) || []);
+                const availableProjects = allProjectsData?.items?.filter(
+                  p => !linkedProjectIds.has(p.id)
+                ) || [];
+
+                if (availableProjects.length === 0) {
+                  return (
+                    <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                      No available projects to add. All projects are already linked to this theme or there are no projects yet.
+                    </p>
+                  );
+                }
+
+                return (
+                  <div className="space-y-2">
+                    {availableProjects.map((project) => (
+                      <button
+                        key={project.id}
+                        onClick={() => addProjectToThemeMutation.mutate(project.id)}
+                        disabled={addProjectToThemeMutation.isPending}
+                        className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-left transition-colors disabled:opacity-50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg">
+                            <FolderKanban className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-white">{project.title}</p>
+                            {project.theme && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Currently in: {project.theme.title}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                            project.status === 'Done'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                              : project.status === 'In Progress'
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                          }`}>
+                            {project.status}
+                          </span>
+                          <Plus className="h-4 w-4 text-primary-600" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setShowAddProjectModal(false)}
+                className="w-full px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText="Delete"
+        variant="danger"
+        isLoading={deleteMutation.isPending || removeProjectFromThemeMutation.isPending}
+      />
     </div>
   );
 }
