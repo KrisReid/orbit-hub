@@ -1,3 +1,4 @@
+// Page exports
 export { LoginPage } from './LoginPage';
 export { DashboardPage } from './DashboardPage';
 export { ThemesPage } from './ThemesPage';

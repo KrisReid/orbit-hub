@@ -54,6 +54,7 @@ class ApiClient {
     );
   }
 
+  // Auth management
   setToken(token: string) {
     this.token = token;
     localStorage.setItem('token', token);
@@ -68,435 +69,470 @@ class ApiClient {
     return !!this.token;
   }
 
-  // Auth
-  async login(data: LoginRequest): Promise<Token> {
-    const response = await this.client.post<Token>('/auth/login', data);
-    this.setToken(response.data.access_token);
-    return response.data;
-  }
+  // ============================================
+  // Auth API
+  // ============================================
+  auth = {
+    login: async (data: LoginRequest): Promise<Token> => {
+      const response = await this.client.post<Token>('/auth/login', data);
+      this.setToken(response.data.access_token);
+      return response.data;
+    },
+    
+    me: async (): Promise<User> => {
+      const response = await this.client.get<User>('/auth/me');
+      return response.data;
+    },
+  };
 
-  async getCurrentUser(): Promise<User> {
-    const response = await this.client.get<User>('/auth/me');
-    return response.data;
-  }
+  // ============================================
+  // Users API
+  // ============================================
+  users = {
+    list: async (page = 1, pageSize = 50): Promise<PaginatedResponse<User>> => {
+      const response = await this.client.get<PaginatedResponse<User>>('/users', {
+        params: { page, page_size: pageSize },
+      });
+      return response.data;
+    },
 
-  // Users
-  async getUsers(page = 1, pageSize = 50): Promise<PaginatedResponse<User>> {
-    const response = await this.client.get<PaginatedResponse<User>>('/users', {
-      params: { page, page_size: pageSize },
-    });
-    return response.data;
-  }
+    get: async (id: number): Promise<User> => {
+      const response = await this.client.get<User>(`/users/${id}`);
+      return response.data;
+    },
 
-  async createUser(data: Partial<User> & { password: string }): Promise<User> {
-    const response = await this.client.post<User>('/users', data);
-    return response.data;
-  }
+    create: async (data: Partial<User> & { password: string }): Promise<User> => {
+      const response = await this.client.post<User>('/users', data);
+      return response.data;
+    },
 
-  async updateUser(id: number, data: Partial<User>): Promise<User> {
-    const response = await this.client.patch<User>(`/users/${id}`, data);
-    return response.data;
-  }
+    update: async (id: number, data: Partial<User>): Promise<User> => {
+      const response = await this.client.patch<User>(`/users/${id}`, data);
+      return response.data;
+    },
 
-  async deleteUser(id: number): Promise<MessageResponse> {
-    const response = await this.client.delete<MessageResponse>(`/users/${id}`);
-    return response.data;
-  }
+    delete: async (id: number): Promise<MessageResponse> => {
+      const response = await this.client.delete<MessageResponse>(`/users/${id}`);
+      return response.data;
+    },
+  };
 
-  // Teams
-  async getTeams(page = 1, pageSize = 50): Promise<PaginatedResponse<Team>> {
-    const response = await this.client.get<PaginatedResponse<Team>>('/teams', {
-      params: { page, page_size: pageSize },
-    });
-    return response.data;
-  }
+  // ============================================
+  // Teams API
+  // ============================================
+  teams = {
+    list: async (page = 1, pageSize = 50): Promise<PaginatedResponse<Team>> => {
+      const response = await this.client.get<PaginatedResponse<Team>>('/teams', {
+        params: { page, page_size: pageSize },
+      });
+      return response.data;
+    },
 
-  async getTeam(id: number): Promise<Team & { members: TeamMember[] }> {
-    const response = await this.client.get<Team & { members: TeamMember[] }>(`/teams/${id}`);
-    return response.data;
-  }
+    get: async (id: number): Promise<Team & { members: TeamMember[] }> => {
+      const response = await this.client.get<Team & { members: TeamMember[] }>(`/teams/${id}`);
+      return response.data;
+    },
 
-  async createTeam(data: Partial<Team>): Promise<Team> {
-    const response = await this.client.post<Team>('/teams', data);
-    return response.data;
-  }
+    create: async (data: Partial<Team>): Promise<Team> => {
+      const response = await this.client.post<Team>('/teams', data);
+      return response.data;
+    },
 
-  async updateTeam(id: number, data: Partial<Team>): Promise<Team> {
-    const response = await this.client.patch<Team>(`/teams/${id}`, data);
-    return response.data;
-  }
+    update: async (id: number, data: Partial<Team>): Promise<Team> => {
+      const response = await this.client.patch<Team>(`/teams/${id}`, data);
+      return response.data;
+    },
 
-  async getTeamStats(id: number): Promise<{ team_id: number; team_name: string; task_count: number; task_type_count: number; is_unassigned_team: boolean }> {
-    const response = await this.client.get(`/teams/${id}/stats`);
-    return response.data;
-  }
+    delete: async (id: number, reassignTasksTo?: number): Promise<MessageResponse> => {
+      const response = await this.client.delete<MessageResponse>(`/teams/${id}`, {
+        params: reassignTasksTo ? { reassign_tasks_to: reassignTasksTo } : undefined,
+      });
+      return response.data;
+    },
 
-  async deleteTeam(id: number, reassignTasksTo?: number): Promise<MessageResponse> {
-    const response = await this.client.delete<MessageResponse>(`/teams/${id}`, {
-      params: reassignTasksTo ? { reassign_tasks_to: reassignTasksTo } : undefined,
-    });
-    return response.data;
-  }
+    getStats: async (id: number): Promise<{
+      team_id: number;
+      team_name: string;
+      task_count: number;
+      task_type_count: number;
+      is_unassigned_team: boolean;
+    }> => {
+      const response = await this.client.get(`/teams/${id}/stats`);
+      return response.data;
+    },
 
-  async addTeamMember(teamId: number, userId: number): Promise<TeamMember> {
-    const response = await this.client.post<TeamMember>(`/teams/${teamId}/members`, { user_id: userId });
-    return response.data;
-  }
+    addMember: async (teamId: number, userId: number): Promise<TeamMember> => {
+      const response = await this.client.post<TeamMember>(`/teams/${teamId}/members`, { user_id: userId });
+      return response.data;
+    },
 
-  async removeTeamMember(teamId: number, userId: number): Promise<MessageResponse> {
-    const response = await this.client.delete<MessageResponse>(`/teams/${teamId}/members/${userId}`);
-    return response.data;
-  }
+    removeMember: async (teamId: number, userId: number): Promise<MessageResponse> => {
+      const response = await this.client.delete<MessageResponse>(`/teams/${teamId}/members/${userId}`);
+      return response.data;
+    },
+  };
 
-  // Themes
-  async getThemes(page = 1, pageSize = 50, includeArchived = false): Promise<PaginatedResponse<Theme>> {
-    const response = await this.client.get<PaginatedResponse<Theme>>('/themes', {
-      params: { page, page_size: pageSize, include_archived: includeArchived },
-    });
-    return response.data;
-  }
-
-  async getTheme(id: number): Promise<Theme & { projects: Array<{ id: number; title: string; status: string }> }> {
-    const response = await this.client.get(`/themes/${id}`);
-    return response.data;
-  }
-
-  async createTheme(data: Partial<Theme>): Promise<Theme> {
-    const response = await this.client.post<Theme>('/themes', data);
-    return response.data;
-  }
-
-  async updateTheme(id: number, data: Partial<Theme>): Promise<Theme> {
-    const response = await this.client.patch<Theme>(`/themes/${id}`, data);
-    return response.data;
-  }
-
-  async deleteTheme(id: number): Promise<MessageResponse> {
-    const response = await this.client.delete<MessageResponse>(`/themes/${id}`);
-    return response.data;
-  }
-
-  // Project Types
-  async getProjectTypes(page = 1, pageSize = 50): Promise<PaginatedResponse<ProjectType>> {
-    const response = await this.client.get<PaginatedResponse<ProjectType>>('/project-types', {
-      params: { page, page_size: pageSize },
-    });
-    return response.data;
-  }
-
-  async getProjectType(id: number): Promise<ProjectType> {
-    const response = await this.client.get<ProjectType>(`/project-types/${id}`);
-    return response.data;
-  }
-
-  async createProjectType(data: Partial<ProjectType>): Promise<ProjectType> {
-    const response = await this.client.post<ProjectType>('/project-types', data);
-    return response.data;
-  }
-
-  async updateProjectType(id: number, data: Partial<ProjectType>): Promise<ProjectType> {
-    const response = await this.client.patch<ProjectType>(`/project-types/${id}`, data);
-    return response.data;
-  }
-
-  async getProjectTypeStats(id: number): Promise<{ project_type_id: number; project_type_name: string; workflow: string[]; total_projects: number; projects_by_status: Record<string, number> }> {
-    const response = await this.client.get(`/project-types/${id}/stats`);
-    return response.data;
-  }
-
-  async migrateProjectType(id: number, targetTypeId: number, statusMappings: Array<{ old_status: string; new_status: string }>): Promise<MessageResponse> {
-    const response = await this.client.post<MessageResponse>(`/project-types/${id}/migrate`, {
-      target_project_type_id: targetTypeId,
-      status_mappings: statusMappings,
-    });
-    return response.data;
-  }
-
-  async deleteProjectType(id: number): Promise<MessageResponse> {
-    const response = await this.client.delete<MessageResponse>(`/project-types/${id}`);
-    return response.data;
-  }
-
-  // Projects
-  async getProjects(
-    page = 1,
-    pageSize = 50,
-    filters?: { theme_id?: number; project_type_id?: number; status?: string }
-  ): Promise<PaginatedResponse<Project>> {
-    const response = await this.client.get<PaginatedResponse<Project>>('/projects', {
-      params: { page, page_size: pageSize, ...filters },
-    });
-    return response.data;
-  }
-
-  async getProject(id: number): Promise<Project> {
-    const response = await this.client.get<Project>(`/projects/${id}`);
-    return response.data;
-  }
-
-  async createProject(data: Partial<Project>): Promise<Project> {
-    const response = await this.client.post<Project>('/projects', data);
-    return response.data;
-  }
-
-  async updateProject(id: number, data: Partial<Project>): Promise<Project> {
-    const response = await this.client.patch<Project>(`/projects/${id}`, data);
-    return response.data;
-  }
-
-  async deleteProject(id: number): Promise<MessageResponse> {
-    const response = await this.client.delete<MessageResponse>(`/projects/${id}`);
-    return response.data;
-  }
-
-  async addProjectDependency(projectId: number, dependsOnId: number): Promise<MessageResponse> {
-    const response = await this.client.post<MessageResponse>(`/projects/${projectId}/dependencies`, {
-      depends_on_id: dependsOnId,
-    });
-    return response.data;
-  }
-
-  async removeProjectDependency(projectId: number, dependsOnId: number): Promise<MessageResponse> {
-    const response = await this.client.delete<MessageResponse>(`/projects/${projectId}/dependencies/${dependsOnId}`);
-    return response.data;
-  }
-
-  // Task Types
-  async getTaskTypes(page = 1, pageSize = 50, teamId?: number): Promise<PaginatedResponse<TaskType>> {
-    const response = await this.client.get<PaginatedResponse<TaskType>>('/task-types', {
-      params: { page, page_size: pageSize, team_id: teamId },
-    });
-    return response.data;
-  }
-
-  async getTaskType(id: number): Promise<TaskType> {
-    const response = await this.client.get<TaskType>(`/task-types/${id}`);
-    return response.data;
-  }
-
-  async createTaskType(teamId: number, data: Partial<TaskType>): Promise<TaskType> {
-    const response = await this.client.post<TaskType>('/task-types', data, {
-      params: { team_id: teamId },
-    });
-    return response.data;
-  }
-
-  async updateTaskType(id: number, data: Partial<TaskType>): Promise<TaskType> {
-    const response = await this.client.patch<TaskType>(`/task-types/${id}`, data);
-    return response.data;
-  }
-
-  async getTaskTypeStats(id: number): Promise<{ task_type_id: number; task_type_name: string; team_id: number; workflow: string[]; total_tasks: number; tasks_by_status: Record<string, number> }> {
-    const response = await this.client.get(`/task-types/${id}/stats`);
-    return response.data;
-  }
-
-  async migrateTaskType(id: number, targetTypeId: number, statusMappings: Array<{ old_status: string; new_status: string }>): Promise<MessageResponse> {
-    const response = await this.client.post<MessageResponse>(`/task-types/${id}/migrate`, {
-      target_task_type_id: targetTypeId,
-      status_mappings: statusMappings,
-    });
-    return response.data;
-  }
-
-  async deleteTaskType(id: number): Promise<MessageResponse> {
-    const response = await this.client.delete<MessageResponse>(`/task-types/${id}`);
-    return response.data;
-  }
-
-  // Tasks
-  async getTasks(
-    page = 1,
-    pageSize = 50,
-    filters?: { team_id?: number; project_id?: number; release_id?: number; task_type_id?: number; status?: string }
-  ): Promise<PaginatedResponse<Task>> {
-    const response = await this.client.get<PaginatedResponse<Task>>('/tasks', {
-      params: { page, page_size: pageSize, ...filters },
-    });
-    return response.data;
-  }
-
-  async getTask(id: number): Promise<Task> {
-    const response = await this.client.get<Task>(`/tasks/${id}`);
-    return response.data;
-  }
-
-  async getTaskByDisplayId(displayId: string): Promise<Task> {
-    const response = await this.client.get<Task>(`/tasks/by-display-id/${displayId}`);
-    return response.data;
-  }
-
-  async createTask(data: Partial<Task>): Promise<Task> {
-    const response = await this.client.post<Task>('/tasks', data);
-    return response.data;
-  }
-
-  async updateTask(id: number, data: Partial<Task>): Promise<Task> {
-    const response = await this.client.patch<Task>(`/tasks/${id}`, data);
-    return response.data;
-  }
-
-  async deleteTask(id: number): Promise<MessageResponse> {
-    const response = await this.client.delete<MessageResponse>(`/tasks/${id}`);
-    return response.data;
-  }
-
-  async addTaskDependency(taskId: number, dependsOnId: number): Promise<MessageResponse> {
-    const response = await this.client.post<MessageResponse>(`/tasks/${taskId}/dependencies`, {
-      depends_on_id: dependsOnId,
-    });
-    return response.data;
-  }
-
-  async removeTaskDependency(taskId: number, dependsOnId: number): Promise<MessageResponse> {
-    const response = await this.client.delete<MessageResponse>(`/tasks/${taskId}/dependencies/${dependsOnId}`);
-    return response.data;
-  }
-
-  // Releases
-  async getReleases(page = 1, pageSize = 50, status?: string): Promise<PaginatedResponse<Release>> {
-    const response = await this.client.get<PaginatedResponse<Release>>('/releases', {
-      params: { page, page_size: pageSize, status },
-    });
-    return response.data;
-  }
-
-  async getRelease(id: number): Promise<Release> {
-    const response = await this.client.get<Release>(`/releases/${id}`);
-    return response.data;
-  }
-
-  async createRelease(data: Partial<Release>): Promise<Release> {
-    const response = await this.client.post<Release>('/releases', data);
-    return response.data;
-  }
-
-  async updateRelease(id: number, data: Partial<Release>): Promise<Release> {
-    const response = await this.client.patch<Release>(`/releases/${id}`, data);
-    return response.data;
-  }
-
-  async deleteRelease(id: number): Promise<MessageResponse> {
-    const response = await this.client.delete<MessageResponse>(`/releases/${id}`);
-    return response.data;
-  }
-
-  // GitHub Links
-  async getTaskGitHubLinks(taskId: number): Promise<GitHubLink[]> {
-    const response = await this.client.get<GitHubLink[]>(`/github/links/${taskId}`);
-    return response.data;
-  }
-
-  async addGitHubLink(taskId: number, data: Partial<GitHubLink>): Promise<GitHubLink> {
-    const response = await this.client.post<GitHubLink>(`/github/links/${taskId}`, data);
-    return response.data;
-  }
-
-  async removeGitHubLink(taskId: number, linkId: number): Promise<MessageResponse> {
-    const response = await this.client.delete<MessageResponse>(`/github/links/${taskId}/${linkId}`);
-    return response.data;
-  }
-  // Namespace-based API for pages
+  // ============================================
+  // Themes API
+  // ============================================
   themes = {
-    list: (params?: { include_archived?: boolean }) =>
-      this.getThemes(1, 50, params?.include_archived),
-    get: (id: number) => this.getTheme(id),
-    create: (data: Partial<Theme>) => this.createTheme(data),
-    update: (id: number, data: Partial<Theme>) => this.updateTheme(id, data),
-    delete: (id: number) => this.deleteTheme(id),
+    list: async (params?: { include_archived?: boolean }): Promise<PaginatedResponse<Theme>> => {
+      const response = await this.client.get<PaginatedResponse<Theme>>('/themes', {
+        params: { page: 1, page_size: 50, include_archived: params?.include_archived },
+      });
+      return response.data;
+    },
+
+    get: async (id: number): Promise<Theme & { projects: Array<{ id: number; title: string; status: string }> }> => {
+      const response = await this.client.get(`/themes/${id}`);
+      return response.data;
+    },
+
+    create: async (data: Partial<Theme>): Promise<Theme> => {
+      const response = await this.client.post<Theme>('/themes', data);
+      return response.data;
+    },
+
+    update: async (id: number, data: Partial<Theme>): Promise<Theme> => {
+      const response = await this.client.patch<Theme>(`/themes/${id}`, data);
+      return response.data;
+    },
+
+    delete: async (id: number): Promise<MessageResponse> => {
+      const response = await this.client.delete<MessageResponse>(`/themes/${id}`);
+      return response.data;
+    },
   };
 
-  projects = {
-    list: (filters?: { project_type_id?: number; status?: string; page?: number; page_size?: number }) =>
-      this.getProjects(filters?.page || 1, filters?.page_size || 50, filters),
-    get: (id: number) => this.getProject(id),
-    create: (data: Partial<Project>) => this.createProject(data),
-    update: (id: number, data: Partial<Project>) => this.updateProject(id, data),
-    delete: (id: number) => this.deleteProject(id),
-  };
-
+  // ============================================
+  // Project Types API
+  // ============================================
   projectTypes = {
-    list: () => this.getProjectTypes(),
-    get: (id: number) => this.getProjectType(id),
-    create: (data: Partial<ProjectType>) => this.createProjectType(data),
-    update: (id: number, data: Partial<ProjectType>) => this.updateProjectType(id, data),
-    delete: (id: number) => this.deleteProjectType(id),
-    getStats: (id: number) => this.getProjectTypeStats(id),
-    migrate: (id: number, targetTypeId: number, statusMappings: Array<{ old_status: string; new_status: string }>) =>
-      this.migrateProjectType(id, targetTypeId, statusMappings),
+    list: async (page = 1, pageSize = 50): Promise<PaginatedResponse<ProjectType>> => {
+      const response = await this.client.get<PaginatedResponse<ProjectType>>('/project-types', {
+        params: { page, page_size: pageSize },
+      });
+      return response.data;
+    },
+
+    get: async (id: number): Promise<ProjectType> => {
+      const response = await this.client.get<ProjectType>(`/project-types/${id}`);
+      return response.data;
+    },
+
+    create: async (data: Partial<ProjectType>): Promise<ProjectType> => {
+      const response = await this.client.post<ProjectType>('/project-types', data);
+      return response.data;
+    },
+
+    update: async (id: number, data: Partial<ProjectType>): Promise<ProjectType> => {
+      const response = await this.client.patch<ProjectType>(`/project-types/${id}`, data);
+      return response.data;
+    },
+
+    delete: async (id: number): Promise<MessageResponse> => {
+      const response = await this.client.delete<MessageResponse>(`/project-types/${id}`);
+      return response.data;
+    },
+
+    getStats: async (id: number): Promise<{
+      project_type_id: number;
+      project_type_name: string;
+      workflow: string[];
+      total_projects: number;
+      projects_by_status: Record<string, number>;
+    }> => {
+      const response = await this.client.get(`/project-types/${id}/stats`);
+      return response.data;
+    },
+
+    migrate: async (
+      id: number,
+      targetTypeId: number,
+      statusMappings: Array<{ old_status: string; new_status: string }>
+    ): Promise<MessageResponse> => {
+      const response = await this.client.post<MessageResponse>(`/project-types/${id}/migrate`, {
+        target_project_type_id: targetTypeId,
+        status_mappings: statusMappings,
+      });
+      return response.data;
+    },
+
     // Field management
-    addField: async (projectTypeId: number, data: {
-      key: string;
-      label: string;
-      field_type: string;
-      options?: string[];
-      required?: boolean;
-      order?: number;
-    }) => {
+    addField: async (
+      projectTypeId: number,
+      data: {
+        key: string;
+        label: string;
+        field_type: string;
+        options?: string[];
+        required?: boolean;
+        order?: number;
+      }
+    ) => {
       const response = await this.client.post(`/project-types/${projectTypeId}/fields`, data);
       return response.data;
     },
-    updateField: async (projectTypeId: number, fieldId: number, data: {
-      label?: string;
-      options?: string[];
-      required?: boolean;
-      order?: number;
-    }) => {
+
+    updateField: async (
+      projectTypeId: number,
+      fieldId: number,
+      data: {
+        label?: string;
+        options?: string[];
+        required?: boolean;
+        order?: number;
+      }
+    ) => {
       const response = await this.client.patch(`/project-types/${projectTypeId}/fields/${fieldId}`, data);
       return response.data;
     },
+
     deleteField: async (projectTypeId: number, fieldId: number) => {
       const response = await this.client.delete(`/project-types/${projectTypeId}/fields/${fieldId}`);
       return response.data;
     },
   };
 
-  tasks = {
-    list: (filters?: { team_id?: number; project_id?: number; release_id?: number; status?: string; page?: number; page_size?: number }) =>
-      this.getTasks(filters?.page || 1, filters?.page_size || 50, filters),
-    get: (id: number) => this.getTask(id),
-    create: (data: Partial<Task>) => this.createTask(data),
-    update: (id: number, data: Partial<Task>) => this.updateTask(id, data),
-    delete: (id: number) => this.deleteTask(id),
+  // ============================================
+  // Projects API
+  // ============================================
+  projects = {
+    list: async (filters?: {
+      theme_id?: number;
+      project_type_id?: number;
+      status?: string;
+      page?: number;
+      page_size?: number;
+    }): Promise<PaginatedResponse<Project>> => {
+      const response = await this.client.get<PaginatedResponse<Project>>('/projects', {
+        params: {
+          page: filters?.page || 1,
+          page_size: filters?.page_size || 50,
+          theme_id: filters?.theme_id,
+          project_type_id: filters?.project_type_id,
+          status: filters?.status,
+        },
+      });
+      return response.data;
+    },
+
+    get: async (id: number): Promise<Project> => {
+      const response = await this.client.get<Project>(`/projects/${id}`);
+      return response.data;
+    },
+
+    create: async (data: Partial<Project>): Promise<Project> => {
+      const response = await this.client.post<Project>('/projects', data);
+      return response.data;
+    },
+
+    update: async (id: number, data: Partial<Project>): Promise<Project> => {
+      const response = await this.client.patch<Project>(`/projects/${id}`, data);
+      return response.data;
+    },
+
+    delete: async (id: number): Promise<MessageResponse> => {
+      const response = await this.client.delete<MessageResponse>(`/projects/${id}`);
+      return response.data;
+    },
+
+    addDependency: async (projectId: number, dependsOnId: number): Promise<MessageResponse> => {
+      const response = await this.client.post<MessageResponse>(`/projects/${projectId}/dependencies`, {
+        depends_on_id: dependsOnId,
+      });
+      return response.data;
+    },
+
+    removeDependency: async (projectId: number, dependsOnId: number): Promise<MessageResponse> => {
+      const response = await this.client.delete<MessageResponse>(`/projects/${projectId}/dependencies/${dependsOnId}`);
+      return response.data;
+    },
   };
 
+  // ============================================
+  // Task Types API
+  // ============================================
   taskTypes = {
-    list: (filters?: { team_id?: number }) =>
-      this.getTaskTypes(1, 50, filters?.team_id),
-    get: (id: number) => this.getTaskType(id),
-    create: (teamId: number, data: Partial<TaskType>) => this.createTaskType(teamId, data),
-    update: (id: number, data: Partial<TaskType>) => this.updateTaskType(id, data),
-    delete: (id: number) => this.deleteTaskType(id),
-    getStats: (id: number) => this.getTaskTypeStats(id),
-    migrate: (id: number, targetTypeId: number, statusMappings: Array<{ old_status: string; new_status: string }>) =>
-      this.migrateTaskType(id, targetTypeId, statusMappings),
+    list: async (filters?: { team_id?: number }): Promise<PaginatedResponse<TaskType>> => {
+      const response = await this.client.get<PaginatedResponse<TaskType>>('/task-types', {
+        params: { page: 1, page_size: 50, team_id: filters?.team_id },
+      });
+      return response.data;
+    },
+
+    get: async (id: number): Promise<TaskType> => {
+      const response = await this.client.get<TaskType>(`/task-types/${id}`);
+      return response.data;
+    },
+
+    create: async (teamId: number, data: Partial<TaskType>): Promise<TaskType> => {
+      const response = await this.client.post<TaskType>('/task-types', data, {
+        params: { team_id: teamId },
+      });
+      return response.data;
+    },
+
+    update: async (id: number, data: Partial<TaskType>): Promise<TaskType> => {
+      const response = await this.client.patch<TaskType>(`/task-types/${id}`, data);
+      return response.data;
+    },
+
+    delete: async (id: number): Promise<MessageResponse> => {
+      const response = await this.client.delete<MessageResponse>(`/task-types/${id}`);
+      return response.data;
+    },
+
+    getStats: async (id: number): Promise<{
+      task_type_id: number;
+      task_type_name: string;
+      team_id: number;
+      workflow: string[];
+      total_tasks: number;
+      tasks_by_status: Record<string, number>;
+    }> => {
+      const response = await this.client.get(`/task-types/${id}/stats`);
+      return response.data;
+    },
+
+    migrate: async (
+      id: number,
+      targetTypeId: number,
+      statusMappings: Array<{ old_status: string; new_status: string }>
+    ): Promise<MessageResponse> => {
+      const response = await this.client.post<MessageResponse>(`/task-types/${id}/migrate`, {
+        target_task_type_id: targetTypeId,
+        status_mappings: statusMappings,
+      });
+      return response.data;
+    },
   };
 
+  // ============================================
+  // Tasks API
+  // ============================================
+  tasks = {
+    list: async (filters?: {
+      team_id?: number;
+      project_id?: number;
+      release_id?: number;
+      task_type_id?: number;
+      status?: string;
+      page?: number;
+      page_size?: number;
+    }): Promise<PaginatedResponse<Task>> => {
+      const response = await this.client.get<PaginatedResponse<Task>>('/tasks', {
+        params: {
+          page: filters?.page || 1,
+          page_size: filters?.page_size || 50,
+          team_id: filters?.team_id,
+          project_id: filters?.project_id,
+          release_id: filters?.release_id,
+          task_type_id: filters?.task_type_id,
+          status: filters?.status,
+        },
+      });
+      return response.data;
+    },
+
+    get: async (id: number): Promise<Task> => {
+      const response = await this.client.get<Task>(`/tasks/${id}`);
+      return response.data;
+    },
+
+    getByDisplayId: async (displayId: string): Promise<Task> => {
+      const response = await this.client.get<Task>(`/tasks/by-display-id/${displayId}`);
+      return response.data;
+    },
+
+    create: async (data: Partial<Task>): Promise<Task> => {
+      const response = await this.client.post<Task>('/tasks', data);
+      return response.data;
+    },
+
+    update: async (id: number, data: Partial<Task>): Promise<Task> => {
+      const response = await this.client.patch<Task>(`/tasks/${id}`, data);
+      return response.data;
+    },
+
+    delete: async (id: number): Promise<MessageResponse> => {
+      const response = await this.client.delete<MessageResponse>(`/tasks/${id}`);
+      return response.data;
+    },
+
+    addDependency: async (taskId: number, dependsOnId: number): Promise<MessageResponse> => {
+      const response = await this.client.post<MessageResponse>(`/tasks/${taskId}/dependencies`, {
+        depends_on_id: dependsOnId,
+      });
+      return response.data;
+    },
+
+    removeDependency: async (taskId: number, dependsOnId: number): Promise<MessageResponse> => {
+      const response = await this.client.delete<MessageResponse>(`/tasks/${taskId}/dependencies/${dependsOnId}`);
+      return response.data;
+    },
+  };
+
+  // ============================================
+  // Releases API
+  // ============================================
   releases = {
-    list: (filters?: { status?: string }) =>
-      this.getReleases(1, 50, filters?.status),
-    get: (id: number) => this.getRelease(id),
-    create: (data: Partial<Release>) => this.createRelease(data),
-    update: (id: number, data: Partial<Release>) => this.updateRelease(id, data),
-    delete: (id: number) => this.deleteRelease(id),
+    list: async (filters?: { status?: string }): Promise<PaginatedResponse<Release>> => {
+      const response = await this.client.get<PaginatedResponse<Release>>('/releases', {
+        params: { page: 1, page_size: 50, status: filters?.status },
+      });
+      return response.data;
+    },
+
+    get: async (id: number): Promise<Release> => {
+      const response = await this.client.get<Release>(`/releases/${id}`);
+      return response.data;
+    },
+
+    create: async (data: Partial<Release>): Promise<Release> => {
+      const response = await this.client.post<Release>('/releases', data);
+      return response.data;
+    },
+
+    update: async (id: number, data: Partial<Release>): Promise<Release> => {
+      const response = await this.client.patch<Release>(`/releases/${id}`, data);
+      return response.data;
+    },
+
+    delete: async (id: number): Promise<MessageResponse> => {
+      const response = await this.client.delete<MessageResponse>(`/releases/${id}`);
+      return response.data;
+    },
   };
 
-  users = {
-    list: () => this.getUsers(),
-    get: (id: number) => this.getUsers(),
-    create: (data: Partial<User> & { password: string }) => this.createUser(data),
-    update: (id: number, data: Partial<User>) => this.updateUser(id, data),
-    delete: (id: number) => this.deleteUser(id),
+  // ============================================
+  // GitHub Links API
+  // ============================================
+  github = {
+    getLinks: async (taskId: number): Promise<GitHubLink[]> => {
+      const response = await this.client.get<GitHubLink[]>(`/github/links/${taskId}`);
+      return response.data;
+    },
+
+    addLink: async (taskId: number, data: Partial<GitHubLink>): Promise<GitHubLink> => {
+      const response = await this.client.post<GitHubLink>(`/github/links/${taskId}`, data);
+      return response.data;
+    },
+
+    removeLink: async (taskId: number, linkId: number): Promise<MessageResponse> => {
+      const response = await this.client.delete<MessageResponse>(`/github/links/${taskId}/${linkId}`);
+      return response.data;
+    },
   };
 
-  teams = {
-    list: () => this.getTeams(),
-    get: (id: number) => this.getTeam(id),
-    create: (data: Partial<Team>) => this.createTeam(data),
-    update: (id: number, data: Partial<Team>) => this.updateTeam(id, data),
-    delete: (id: number, reassignTasksTo?: number) => this.deleteTeam(id, reassignTasksTo),
-    getStats: (id: number) => this.getTeamStats(id),
-  };
+  // Legacy method aliases for backward compatibility
+  // TODO: Remove these after all usages are updated
+  getCurrentUser = () => this.auth.me();
+  login = (data: LoginRequest) => this.auth.login(data);
+  addTaskDependency = (taskId: number, dependsOnId: number) => this.tasks.addDependency(taskId, dependsOnId);
+  removeTaskDependency = (taskId: number, dependsOnId: number) => this.tasks.removeDependency(taskId, dependsOnId);
+  addProjectDependency = (projectId: number, dependsOnId: number) => this.projects.addDependency(projectId, dependsOnId);
+  removeProjectDependency = (projectId: number, dependsOnId: number) => this.projects.removeDependency(projectId, dependsOnId);
 }
 
 export const api = new ApiClient();
