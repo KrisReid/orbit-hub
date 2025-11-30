@@ -26,8 +26,8 @@ import { useEntityModal } from '@/hooks';
 export function ProjectsPage() {
   const queryClient = useQueryClient();
   const modal = useEntityModal<Project>();
-  const [filterType, setFilterType] = useState<number | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string | null>(null);
+  const [filterTypes, setFilterTypes] = useState<number[]>([]);
+  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -37,10 +37,10 @@ export function ProjectsPage() {
   const [customData, setCustomData] = useState<Record<string, unknown>>({});
 
   const { data: projects, isLoading } = useQuery({
-    queryKey: ['projects', { project_type_id: filterType, status: filterStatus }],
-    queryFn: () => api.projects.list({ 
-      project_type_id: filterType || undefined,
-      status: filterStatus || undefined,
+    queryKey: ['projects', { project_type_ids: filterTypes, statuses: filterStatuses }],
+    queryFn: () => api.projects.list({
+      project_type_ids: filterTypes.length > 0 ? filterTypes : undefined,
+      statuses: filterStatuses.length > 0 ? filterStatuses : undefined,
     }),
   });
 
@@ -113,10 +113,16 @@ export function ProjectsPage() {
     setCustomData((prev) => ({ ...prev, [key]: value }));
   };
 
-  // Get unique statuses from project types
-  const allStatuses = new Set<string>();
+  // Get unique statuses from project types - collect all statuses from all project type workflows
+  const allStatuses: string[] = [];
+  const statusSet = new Set<string>();
   projectTypes?.items?.forEach(pt => {
-    pt.workflow?.forEach(status => allStatuses.add(status));
+    pt.workflow?.forEach(status => {
+      if (!statusSet.has(status)) {
+        statusSet.add(status);
+        allStatuses.push(status);
+      }
+    });
   });
 
   // Convert project type fields to CustomFieldDefinition format
@@ -214,8 +220,9 @@ export function ProjectsPage() {
       <TableFilters
         filters={[
           {
-            value: filterType,
-            onChange: (v) => setFilterType(v as number | null),
+            type: 'multi' as const,
+            value: filterTypes,
+            onChange: (v: (string | number)[]) => setFilterTypes(v as number[]),
             options: (projectTypes?.items || []).map(pt => ({
               value: pt.id,
               label: pt.name,
@@ -223,9 +230,10 @@ export function ProjectsPage() {
             placeholder: 'All Types',
           },
           {
-            value: filterStatus,
-            onChange: (v) => setFilterStatus(v as string | null),
-            options: Array.from(allStatuses).map(status => ({
+            type: 'multi' as const,
+            value: filterStatuses,
+            onChange: (v: (string | number)[]) => setFilterStatuses(v as string[]),
+            options: allStatuses.map(status => ({
               value: status,
               label: status,
             })),

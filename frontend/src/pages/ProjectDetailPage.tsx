@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
-import type { ProjectTypeField, Task } from '@/types';
-import { ExternalLink, ChevronDown } from 'lucide-react';
+import type { ProjectTypeField, Task, TaskType } from '@/types';
+import { ExternalLink, ChevronDown, Plus, Trash2, Link as LinkIcon, CheckSquare } from 'lucide-react';
 import { TaskEditModal } from '@/components/TaskEditModal';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import {
   DetailPageLayout,
   ContentCard,
@@ -17,12 +18,21 @@ import {
   DebouncedInput,
   DebouncedTextarea,
   BreadcrumbDropdown,
+  FormModal,
+  TextInput,
+  Textarea,
+  SelectInput,
+  EmptyState,
 } from '@/components/ui';
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
+  const [showLinkTaskModal, setShowLinkTaskModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const { data: project, isLoading } = useQuery({
     queryKey: ['project', id],
@@ -79,6 +89,15 @@ export function ProjectDetailPage() {
       if (variables.project_type_id) {
         queryClient.invalidateQueries({ queryKey: ['projectType'] });
       }
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.projects.delete(Number(id!)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['themes'] });
+      navigate('/projects');
     },
   });
 
@@ -211,6 +230,17 @@ export function ProjectDetailPage() {
               ]}
             />
           </SidebarCard>
+
+          {/* Actions */}
+          <SidebarCard title="Actions">
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Project
+            </button>
+          </SidebarCard>
         </>
       }
     >
@@ -269,45 +299,115 @@ export function ProjectDetailPage() {
       </ContentCard>
 
       {/* Linked Tasks */}
-      <ContentCard>
-        <LinkedItemsList
-          title="Linked Tasks"
-          items={(project.tasks || []).map(t => ({
-            id: t.id,
-            title: t.title,
-            status: t.status,
-            displayId: t.display_id,
-          }))}
-          availableItems={availableTasks.map(t => ({
-            id: t.id,
-            title: t.title,
-            status: t.status,
-            displayId: t.display_id,
-          }))}
-          onLink={handleLinkTask}
-          onUnlink={handleUnlinkTask}
-          isLoadingAvailable={tasksLoading}
-          emptyMessage={'No tasks linked to this project yet. Click "Link Task" to associate existing tasks.'}
-          noAvailableMessage="No available tasks to link"
-          addButtonText="Link Task"
-          renderItem={(item: { id: number; title: string; status?: string; displayId?: string }, onUnlink: () => void) => {
-            const fullTask = allTasks?.items?.find(t => t.id === item.id);
-            return (
-              <LinkedTaskRow
-                key={item.id}
-                task={{
-                  id: item.id,
-                  display_id: item.displayId || '',
-                  title: item.title,
-                  status: item.status || '',
-                }}
-                onUnlink={onUnlink}
-                onClick={() => fullTask && setSelectedTask(fullTask)}
-              />
-            );
-          }}
-        />
+      <ContentCard
+        title={`Linked Tasks (${project.tasks?.length || 0})`}
+        headerAction={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCreateTaskModal(true)}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Create Task
+            </button>
+            <button
+              onClick={() => setShowLinkTaskModal(true)}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              <LinkIcon className="h-4 w-4" />
+              Link Existing
+            </button>
+          </div>
+        }
+      >
+        {project.tasks && project.tasks.length > 0 ? (
+          <div className="space-y-2">
+            {project.tasks.map((task) => {
+              const fullTask = allTasks?.items?.find(t => t.id === task.id);
+              return (
+                <LinkedTaskRow
+                  key={task.id}
+                  task={{
+                    id: task.id,
+                    display_id: task.display_id || '',
+                    title: task.title,
+                    status: task.status || '',
+                  }}
+                  onUnlink={() => handleUnlinkTask(task.id)}
+                  onClick={() => fullTask && setSelectedTask(fullTask)}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No tasks linked to this project yet. Click "Add Task" to link existing tasks.
+          </p>
+        )}
       </ContentCard>
+
+      {/* Link Task Modal */}
+      <FormModal
+        isOpen={showLinkTaskModal}
+        onClose={() => setShowLinkTaskModal(false)}
+        onSubmit={() => {}}
+        title="Link Task to Project"
+        submitLabel=""
+        cancelLabel="Close"
+        size="lg"
+      >
+        {availableTasks.length === 0 ? (
+          <EmptyState
+            icon={CheckSquare}
+            title="No available tasks"
+            description="All tasks are already linked to this project or there are no tasks yet."
+          />
+        ) : (
+          <div className="space-y-2">
+            {availableTasks.map((task) => (
+              <button
+                key={task.id}
+                onClick={() => {
+                  handleLinkTask(task.id);
+                  setShowLinkTaskModal(false);
+                }}
+                className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-left transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg">
+                    <CheckSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {task.display_id && (
+                        <span className="text-gray-500 dark:text-gray-400 mr-2">{task.display_id}</span>
+                      )}
+                      {task.title}
+                    </p>
+                    {task.project && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Currently in: {task.project.title}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                    task.status === 'Done'
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                      : task.status === 'In Progress'
+                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                  }`}>
+                    {task.status}
+                  </span>
+                  <Plus className="h-4 w-4 text-primary-600" />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </FormModal>
 
       {/* Task Edit Modal */}
       {selectedTask && (
@@ -327,7 +427,161 @@ export function ProjectDetailPage() {
           }}
         />
       )}
+
+      {/* Create Task Modal */}
+      <CreateTaskForProjectModal
+        isOpen={showCreateTaskModal}
+        projectId={Number(id!)}
+        teams={teams?.items || []}
+        taskTypes={taskTypes?.items || []}
+        onClose={() => setShowCreateTaskModal(false)}
+        onTaskCreated={() => {
+          queryClient.invalidateQueries({ queryKey: ['project'] });
+          queryClient.invalidateQueries({ queryKey: ['projects'] });
+          queryClient.invalidateQueries({ queryKey: ['allTasksForLinking'] });
+          queryClient.invalidateQueries({ queryKey: ['tasks'] });
+          setShowCreateTaskModal(false);
+        }}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={() => deleteMutation.mutate()}
+        title="Delete Project"
+        message={`Are you sure you want to delete "${project.title}"? This action cannot be undone. Tasks linked to this project will be unlinked but not deleted.`}
+        confirmText="Delete"
+        variant="danger"
+        isLoading={deleteMutation.isPending}
+      />
     </DetailPageLayout>
+  );
+}
+
+// Create Task Modal for Project
+interface CreateTaskForProjectModalProps {
+  isOpen: boolean;
+  projectId: number;
+  teams: { id: number; name: string; slug: string }[];
+  taskTypes: TaskType[];
+  onClose: () => void;
+  onTaskCreated: () => void;
+}
+
+function CreateTaskForProjectModal({
+  isOpen,
+  projectId,
+  teams,
+  taskTypes,
+  onClose,
+  onTaskCreated,
+}: CreateTaskForProjectModalProps) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [teamId, setTeamId] = useState<number>(0);
+  const [taskTypeId, setTaskTypeId] = useState<number>(0);
+
+  // Get task types for selected team
+  const teamTaskTypes = taskTypes.filter(tt => tt.team_id === teamId);
+
+  // Set initial team when data loads
+  useEffect(() => {
+    if (teams.length > 0 && !teamId) {
+      setTeamId(teams[0].id);
+    }
+  }, [teams, teamId]);
+
+  // Set initial task type when team changes
+  useEffect(() => {
+    if (teamTaskTypes.length > 0) {
+      const currentTypeValid = teamTaskTypes.find(tt => tt.id === taskTypeId);
+      if (!currentTypeValid) {
+        setTaskTypeId(teamTaskTypes[0].id);
+      }
+    } else {
+      setTaskTypeId(0);
+    }
+  }, [teamId, teamTaskTypes, taskTypeId]);
+
+  const createMutation = useMutation({
+    mutationFn: api.tasks.create,
+    onSuccess: () => {
+      onTaskCreated();
+      resetForm();
+    },
+  });
+
+  const resetForm = () => {
+    setTitle('');
+    setDescription('');
+  };
+
+  const handleSubmit = () => {
+    createMutation.mutate({
+      title,
+      description: description || undefined,
+      team_id: teamId,
+      task_type_id: taskTypeId,
+      project_id: projectId,
+    });
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+
+  return (
+    <FormModal
+      isOpen={isOpen}
+      onClose={handleClose}
+      onSubmit={handleSubmit}
+      title="Create Task"
+      submitLabel="Create"
+      loadingLabel="Creating..."
+      isLoading={createMutation.isPending}
+      isDisabled={!teamId || !taskTypeId || !title.trim()}
+    >
+      <div className="space-y-4">
+        <TextInput
+          label="Title"
+          required
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Task title..."
+        />
+
+        <SelectInput
+          label="Team"
+          value={teamId}
+          onChange={(e) => setTeamId(Number(e.target.value))}
+          options={teams.map(t => ({ value: t.id, label: t.name }))}
+        />
+
+        <SelectInput
+          label="Type"
+          value={taskTypeId}
+          onChange={(e) => setTaskTypeId(Number(e.target.value))}
+          options={teamTaskTypes.map(tt => ({ value: tt.id, label: tt.name }))}
+          disabled={teamTaskTypes.length === 0}
+        />
+
+        <Textarea
+          label="Description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+          placeholder="Add a description..."
+        />
+
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <p className="text-sm text-blue-700 dark:text-blue-300">
+            This task will be automatically linked to the current project.
+          </p>
+        </div>
+      </div>
+    </FormModal>
   );
 }
 

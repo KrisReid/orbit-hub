@@ -36,6 +36,10 @@ interface LinkedItemsListProps {
   iconBgColor?: string;
   renderItem?: (item: LinkedItem, onUnlink: () => void) => ReactNode;
   className?: string;
+  /** Additional action buttons to show in the header, before the link button */
+  headerActions?: ReactNode;
+  /** Whether to hide the count in the title */
+  hideCount?: boolean;
 }
 
 /**
@@ -57,6 +61,8 @@ export function LinkedItemsList({
   iconBgColor = 'bg-blue-100 dark:bg-blue-900/30',
   renderItem,
   className = '',
+  headerActions,
+  hideCount = false,
 }: LinkedItemsListProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -68,20 +74,28 @@ export function LinkedItemsList({
     setShowDropdown(false);
   };
 
+  // Determine if we should show the title section
+  const showTitle = title || !hideCount;
+
   return (
     <div className={className}>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-          {title} ({items.length})
-        </h2>
-        <div className="relative" ref={dropdownRef}>
-          <button
-            onClick={() => setShowDropdown(!showDropdown)}
-            className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium flex items-center gap-1"
-          >
-            <Plus className="h-4 w-4" />
-            {addButtonText}
-          </button>
+        {showTitle && (
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            {title}{!hideCount && ` (${items.length})`}
+          </h2>
+        )}
+        {!showTitle && <div />}
+        <div className="flex items-center gap-2">
+          {headerActions}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setShowDropdown(!showDropdown)}
+              className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium flex items-center gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              {addButtonText}
+            </button>
           {showDropdown && (
             <div className="absolute top-full right-0 mt-1 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-10 max-h-64 overflow-y-auto">
               {isLoadingAvailable ? (
@@ -121,6 +135,7 @@ export function LinkedItemsList({
               )}
             </div>
           )}
+          </div>
         </div>
       </div>
 

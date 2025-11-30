@@ -1,10 +1,24 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
 import { Theme } from '@/types';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { Target, ExternalLink, Trash2 } from 'lucide-react';
+
+// Constants for theme workflow statuses
+const THEME_STATUSES_STORAGE_KEY = 'theme_workflow_statuses';
+const DEFAULT_THEME_STATUSES = ['active', 'completed', 'archived'];
+
+// Helper to get theme statuses from localStorage
+function getThemeStatuses(): string[] {
+  try {
+    const saved = localStorage.getItem(THEME_STATUSES_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : DEFAULT_THEME_STATUSES;
+  } catch {
+    return DEFAULT_THEME_STATUSES;
+  }
+}
 import {
   PageHeader,
   PrimaryActionButton,
@@ -27,6 +41,10 @@ export function ThemesPage() {
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [themeToDelete, setThemeToDelete] = useState<{ id: number; title: string } | null>(null);
+
+  // Get theme statuses from settings
+  const themeStatuses = useMemo(() => getThemeStatuses(), []);
+  const defaultStatus = themeStatuses[0] || 'active';
 
   // Modal state
   const modal = useEntityModal<Theme>();
@@ -68,9 +86,10 @@ export function ThemesPage() {
   };
 
   const handleSubmit = () => {
-    createMutation.mutate({ 
-      title, 
-      description: description || undefined 
+    createMutation.mutate({
+      title,
+      description: description || undefined,
+      status: defaultStatus, // Use the first status from settings
     });
   };
 
@@ -168,11 +187,10 @@ export function ThemesPage() {
           {
             value: filterStatus,
             onChange: (v) => setFilterStatus(v as string | null),
-            options: [
-              { value: 'active', label: 'Active' },
-              { value: 'completed', label: 'Completed' },
-              { value: 'archived', label: 'Archived' },
-            ],
+            options: themeStatuses.map(status => ({
+              value: status,
+              label: status.charAt(0).toUpperCase() + status.slice(1),
+            })),
             placeholder: 'All Statuses',
           },
         ]}

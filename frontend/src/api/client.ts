@@ -301,7 +301,9 @@ class ApiClient {
     list: async (filters?: {
       theme_id?: number;
       project_type_id?: number;
+      project_type_ids?: number[];
       status?: string;
+      statuses?: string[];
       page?: number;
       page_size?: number;
     }): Promise<PaginatedResponse<Project>> => {
@@ -311,7 +313,12 @@ class ApiClient {
           page_size: filters?.page_size || 50,
           theme_id: filters?.theme_id,
           project_type_id: filters?.project_type_id,
+          project_type_ids: filters?.project_type_ids,
           status: filters?.status,
+          statuses: filters?.statuses,
+        },
+        paramsSerializer: {
+          indexes: null, // This ensures arrays are serialized as ?statuses=a&statuses=b
         },
       });
       return response.data;

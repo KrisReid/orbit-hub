@@ -1,6 +1,8 @@
 """
 Projects API endpoints.
 """
+from typing import List
+
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -28,10 +30,13 @@ async def list_projects(
     page_size: int = Query(50, ge=1, le=100),
     theme_id: int | None = Query(None),
     project_type_id: int | None = Query(None),
+    project_type_ids: List[int] | None = Query(None, description="Filter by multiple project type IDs"),
     status: str | None = Query(None),
+    statuses: List[str] | None = Query(None, description="Filter by multiple statuses"),
 ) -> PaginatedResponse[ProjectResponse]:
     """
     List all projects with optional filters.
+    Supports both single filters (project_type_id, status) and multi-select filters (project_type_ids, statuses).
     """
     base_query = select(Project)
     count_query = select(func.count()).select_from(Project)
@@ -40,10 +45,20 @@ async def list_projects(
     if theme_id is not None:
         base_query = base_query.where(Project.theme_id == theme_id)
         count_query = count_query.where(Project.theme_id == theme_id)
-    if project_type_id is not None:
+    
+    # Support both single and multiple project type filters
+    if project_type_ids and len(project_type_ids) > 0:
+        base_query = base_query.where(Project.project_type_id.in_(project_type_ids))
+        count_query = count_query.where(Project.project_type_id.in_(project_type_ids))
+    elif project_type_id is not None:
         base_query = base_query.where(Project.project_type_id == project_type_id)
         count_query = count_query.where(Project.project_type_id == project_type_id)
-    if status is not None:
+    
+    # Support both single and multiple status filters
+    if statuses and len(statuses) > 0:
+        base_query = base_query.where(Project.status.in_(statuses))
+        count_query = count_query.where(Project.status.in_(statuses))
+    elif status is not None:
         base_query = base_query.where(Project.status == status)
         count_query = count_query.where(Project.status == status)
     

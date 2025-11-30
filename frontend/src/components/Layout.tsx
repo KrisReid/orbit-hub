@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/auth';
@@ -18,8 +18,27 @@ import {
   Moon,
   Monitor,
   Check,
+  Pin,
+  PinOff,
 } from 'lucide-react';
 import clsx from 'clsx';
+
+// Constants for pinned boards storage
+const PINNED_BOARDS_STORAGE_KEY = 'pinned_board_slugs';
+
+// Helper functions for pinned boards
+function getPinnedBoards(): string[] {
+  try {
+    const saved = localStorage.getItem(PINNED_BOARDS_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePinnedBoards(slugs: string[]): void {
+  localStorage.setItem(PINNED_BOARDS_STORAGE_KEY, JSON.stringify(slugs));
+}
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -42,11 +61,36 @@ export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [boardsOpen, setBoardsOpen] = useState(true);
+  const [pinnedSlugs, setPinnedSlugs] = useState<string[]>(() => getPinnedBoards());
 
   const { data: teams } = useQuery({
     queryKey: ['teams'],
     queryFn: () => api.teams.list(),
   });
+
+  // Sort teams with pinned ones at the top
+  const sortedTeams = useMemo(() => {
+    if (!teams?.items) return [];
+    
+    const pinned = teams.items.filter(t => pinnedSlugs.includes(t.slug));
+    const unpinned = teams.items.filter(t => !pinnedSlugs.includes(t.slug));
+    
+    // Sort pinned by their order in pinnedSlugs array
+    pinned.sort((a, b) => pinnedSlugs.indexOf(a.slug) - pinnedSlugs.indexOf(b.slug));
+    
+    return [...pinned, ...unpinned];
+  }, [teams?.items, pinnedSlugs]);
+
+  const togglePinBoard = (slug: string) => {
+    let newPinned: string[];
+    if (pinnedSlugs.includes(slug)) {
+      newPinned = pinnedSlugs.filter(s => s !== slug);
+    } else {
+      newPinned = [...pinnedSlugs, slug];
+    }
+    setPinnedSlugs(newPinned);
+    savePinnedBoards(newPinned);
+  };
 
   const handleLogout = () => {
     setUserMenuOpen(false);
@@ -128,21 +172,54 @@ export function Layout() {
               </button>
               {boardsOpen && (
                 <div className="mt-2 space-y-1">
-                  {teams?.items?.map((team) => (
-                    <Link
-                      key={team.id}
-                      to={`/board/${team.slug}`}
-                      className={clsx(
-                        'flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors',
-                        location.pathname === `/board/${team.slug}`
-                          ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 font-medium'
-                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      )}
-                    >
-                      <div className="w-2 h-2 bg-current rounded-full" />
-                      {team.name}
-                    </Link>
-                  ))}
+                  {sortedTeams.map((team) => {
+                    const isPinned = pinnedSlugs.includes(team.slug);
+                    return (
+                      <div
+                        key={team.id}
+                        className="group flex items-center"
+                      >
+                        <Link
+                          to={`/board/${team.slug}`}
+                          className={clsx(
+                            'flex-1 flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors',
+                            location.pathname === `/board/${team.slug}`
+                              ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 font-medium'
+                              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                          )}
+                        >
+                          <div className={clsx(
+                            'w-2 h-2 rounded-full',
+                            isPinned ? 'bg-primary-500' : 'bg-current'
+                          )} />
+                          {team.name}
+                          {isPinned && (
+                            <Pin className="h-3 w-3 text-primary-500 ml-auto" />
+                          )}
+                        </Link>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            togglePinBoard(team.slug);
+                          }}
+                          className={clsx(
+                            'p-1.5 rounded transition-all mr-1',
+                            isPinned
+                              ? 'text-primary-500 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20'
+                              : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 opacity-0 group-hover:opacity-100'
+                          )}
+                          title={isPinned ? 'Unpin board' : 'Pin board'}
+                        >
+                          {isPinned ? (
+                            <PinOff className="h-3.5 w-3.5" />
+                          ) : (
+                            <Pin className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
